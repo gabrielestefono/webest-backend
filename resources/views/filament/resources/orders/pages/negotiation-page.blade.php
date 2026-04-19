@@ -18,6 +18,18 @@
                     <div style="font-size: 14px; font-weight: 700; color: #111827;">
                         {{ \App\Models\Order::statusOptions()[$record->status] ?? $record->status }}
                     </div>
+
+                    @if($this->canSeePaymentButton())
+                        <div style="margin-top: 10px;">
+                            <button
+                                type="button"
+                                wire:click="openPaymentModal"
+                                style="border: none; border-radius: 6px; background: #111827; color: #ffffff; cursor: pointer; padding: 8px 14px; font-size: 12px;"
+                            >
+                                Gerar pagamento
+                            </button>
+                        </div>
+                    @endif
                 </div>
 
                 <div>
@@ -170,4 +182,44 @@
             @endif
         </div>
     </div>
+
+    @if($showPaymentModal)
+        <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 9998;" wire:click="closePaymentModal"></div>
+
+        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; max-width: 460px; background: #ffffff; border-radius: 10px; border: 1px solid #d1d5db; padding: 16px; z-index: 9999;">
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #111827;">Gerar pagamento</h3>
+            <p style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280;">
+                Selecione o método e gere o link com o valor acordado: <strong>R$ {{ number_format((float) ($this->agreedProposal()?->price ?? 0), 2, ',', '.') }}</strong>
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #111827;">
+                    <input type="radio" wire:model="paymentMethod" value="pix" /> Pix
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #111827;">
+                    <input type="radio" wire:model="paymentMethod" value="card" /> Cartão
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #111827;">
+                    <input type="radio" wire:model="paymentMethod" value="boleto" /> Boleto
+                </label>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button
+                    type="button"
+                    wire:click="closePaymentModal"
+                    style="border: 1px solid #d1d5db; border-radius: 6px; background: #ffffff; color: #111827; padding: 8px 12px; font-size: 13px; cursor: pointer;"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    wire:click="confirmGeneratePayment"
+                    style="border: none; border-radius: 6px; background: #2563eb; color: #ffffff; padding: 8px 12px; font-size: 13px; cursor: pointer;"
+                >
+                    Gerar link
+                </button>
+            </div>
+        </div>
+    @endif
 </x-filament-panels::page>
