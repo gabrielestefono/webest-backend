@@ -30,6 +30,18 @@
                             </button>
                         </div>
                     @endif
+
+                    @if($this->canSeePaymentLink())
+                        <div style="margin-top: 10px;">
+                            <a
+                                href="{{ $this->paymentLink() }}"
+                                target="_blank"
+                                style="display: inline-block; border: none; border-radius: 6px; background: #2563eb; color: #ffffff; cursor: pointer; padding: 8px 14px; font-size: 12px; text-decoration: none;"
+                            >
+                                Ir para pagamento
+                            </a>
+                        </div>
+                    @endif
                 </div>
 
                 <div>

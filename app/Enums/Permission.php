@@ -32,7 +32,9 @@ enum Permission: string
      */
     public static function adminDefaults(): array
     {
-        return self::values();
+        return array_values(array_diff(self::values(), [
+            self::ViewMyProjects->value,
+        ]));
     }
 
     /**

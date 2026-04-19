@@ -60,10 +60,11 @@ class OrderResource extends Resource
             return false;
         }
 
-        return $user->canAny([
-            Permission::ManageOrders->value,
-            Permission::SubmitProposals->value,
-        ]);
+        if ($user->can(Permission::ManageOrders->value) || $user->hasRole('admin')) {
+            return false;
+        }
+
+        return $user->hasRole('client');
     }
 
     public static function canView(Model $record): bool

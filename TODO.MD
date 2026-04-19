@@ -2,6 +2,8 @@
 
 Este documento detalha a arquitetura, banco de dados e modelagem de UI para um sistema de freelance/negociação utilizando **Laravel 12/13**, **Filament v5**, **MySQL** e **Spatie Permissions**.
 
+> Nota de implementação: nas views e páginas do Filament, preferir CSS inline em vez de classes utilitárias do Tailwind.
+
 ---
 
 ## 1. Stack Tecnológica

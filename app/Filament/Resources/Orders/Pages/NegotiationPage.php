@@ -8,7 +8,6 @@ use App\Models\Order;
 use App\Models\Project;
 use App\Models\Proposal;
 use App\Models\User;
-use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Auth;
@@ -264,6 +263,25 @@ class NegotiationPage extends EditRecord
         return 'Gerar link de pagamento com o valor acordado.';
     }
 
+    public function paymentLink(): ?string
+    {
+        return $this->paymentProject()?->payment_link;
+    }
+
+    public function canSeePaymentLink(): bool
+    {
+        $paymentLink = $this->paymentLink();
+
+        if (! $paymentLink) {
+            return false;
+        }
+
+        /** @var User $user */
+        $user = Auth::user();
+
+        return $this->record->user_id === $user->id && $user->hasRole('client');
+    }
+
     public function openPaymentModal(): void
     {
         if (! $this->canGeneratePayment()) {
@@ -359,14 +377,19 @@ class NegotiationPage extends EditRecord
         /** @var User $user */
         $user = Auth::user();
 
-        $panelId = Filament::getCurrentPanel()?->getId();
-
-        return $panelId === 'admin' || $user->can(Permission::ManageOrders->value);
+        return $user->hasRole('admin') || $user->can(Permission::ManageOrders->value);
     }
 
     protected function hasActiveAgreement(): bool
     {
         return $this->agreedProposal() !== null;
+    }
+
+    protected function paymentProject(): ?Project
+    {
+        return Project::query()
+            ->where('order_id', $this->record->id)
+            ->first();
     }
 
     protected function canManageOrders(): bool
