@@ -11,6 +11,23 @@ class Project extends Model
 {
     use HasFactory;
 
+    public const PAYMENT_STATUSES = [
+        'pending' => 'Pendente',
+        'paid' => 'Pago',
+        'rejected' => 'Rejeitado',
+    ];
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $project): void {
+            if (! $project->wasChanged('payment_status')) {
+                return;
+            }
+
+            $project->syncOrderStatusFromPayment();
+        });
+    }
+
     /**
      * The attributes that are mass assignable.
      *
@@ -50,5 +67,29 @@ class Project extends Model
     public function changeRequests(): HasMany
     {
         return $this->hasMany(ChangeRequest::class);
+    }
+
+    public function syncOrderStatusFromPayment(): void
+    {
+        $order = $this->order;
+
+        if (! $order) {
+            return;
+        }
+
+        $targetStatus = match ($this->payment_status) {
+            'paid', 'approved' => 'paid',
+            'pending' => 'awaiting_payment',
+            'rejected' => 'rejected',
+            default => null,
+        };
+
+        if (! $targetStatus || $order->status === $targetStatus) {
+            return;
+        }
+
+        $order->update([
+            'status' => $targetStatus,
+        ]);
     }
 }

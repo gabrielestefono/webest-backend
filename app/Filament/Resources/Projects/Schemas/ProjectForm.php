@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Projects\Schemas;
 
 use App\Enums\Permission;
+use App\Models\Project;
 use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -30,12 +31,7 @@ class ProjectForm
                     ->required(),
                 Select::make('payment_status')
                     ->label('Status do pagamento')
-                    ->options([
-                        'pending' => 'Pendente',
-                        'approved' => 'Aprovado',
-                        'rejected' => 'Rejeitado',
-                        'paid' => 'Pago',
-                    ])
+                    ->options(Project::PAYMENT_STATUSES)
                     ->required(),
                 TextInput::make('github_url')
                     ->label('GitHub')
