@@ -21,6 +21,7 @@ class Proposal extends Model
         'content',
         'price',
         'is_accepted',
+        'superseded_at',
     ];
 
     /**
@@ -33,6 +34,7 @@ class Proposal extends Model
         return [
             'price' => 'decimal:2',
             'is_accepted' => 'boolean',
+            'superseded_at' => 'datetime',
         ];
     }
 
