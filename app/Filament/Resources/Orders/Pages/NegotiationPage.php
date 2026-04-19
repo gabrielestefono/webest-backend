@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Pages;
 
+use App\Enums\Permission;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Order;
 use App\Models\Project;
@@ -37,6 +38,8 @@ class NegotiationPage extends EditRecord
 
     public function sendProposal(): void
     {
+        abort_unless($this->canSubmitProposalByPermission(), 403);
+
         if (! $this->canSendProposal()) {
             Notification::make()
                 ->title('Ação não permitida')
@@ -90,6 +93,8 @@ class NegotiationPage extends EditRecord
 
     public function acceptProposal(Proposal $proposal): void
     {
+        abort_unless($this->canRespondToProposalByPermission(), 403);
+
         abort_unless($proposal->order_id === $this->record->id, 403);
         abort_unless($proposal->is_accepted === null, 403);
 
@@ -130,6 +135,8 @@ class NegotiationPage extends EditRecord
 
     public function rejectProposal(Proposal $proposal): void
     {
+        abort_unless($this->canRespondToProposalByPermission(), 403);
+
         abort_unless($proposal->order_id === $this->record->id, 403);
         abort_unless($proposal->is_accepted === null, 403);
 
@@ -160,13 +167,17 @@ class NegotiationPage extends EditRecord
 
     public function canSendProposal(): bool
     {
+        if (! $this->canSubmitProposalByPermission()) {
+            return false;
+        }
+
         /** @var User $user */
         $user = Auth::user();
 
         $lastProposal = $this->lastProposal();
 
         if (! $lastProposal) {
-            return $user->hasRole('admin');
+            return $this->canManageOrders();
         }
 
         if ($lastProposal->is_accepted === true) {
@@ -204,9 +215,13 @@ class NegotiationPage extends EditRecord
         /** @var User $user */
         $user = Auth::user();
 
+        if (! $this->canSubmitProposalByPermission()) {
+            return 'Você não possui permissão para enviar propostas.';
+        }
+
         $lastProposal = $this->lastProposal();
 
-        if (! $lastProposal && ! $user->hasRole('admin')) {
+        if (! $lastProposal && ! $this->canManageOrders()) {
             return 'Aguardando a análise inicial do administrador.';
         }
 
@@ -346,11 +361,41 @@ class NegotiationPage extends EditRecord
 
         $panelId = Filament::getCurrentPanel()?->getId();
 
-        return $panelId === 'admin' || $user->hasRole('admin') || $user->can('manage-orders');
+        return $panelId === 'admin' || $user->can(Permission::ManageOrders->value);
     }
 
     protected function hasActiveAgreement(): bool
     {
         return $this->agreedProposal() !== null;
+    }
+
+    protected function canManageOrders(): bool
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        return $user->can(Permission::ManageOrders->value);
+    }
+
+    protected function canSubmitProposalByPermission(): bool
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        return $user->canAny([
+            Permission::ManageOrders->value,
+            Permission::SubmitProposals->value,
+        ]);
+    }
+
+    protected function canRespondToProposalByPermission(): bool
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        return $user->canAny([
+            Permission::ManageOrders->value,
+            Permission::AcceptProposals->value,
+        ]);
     }
 }

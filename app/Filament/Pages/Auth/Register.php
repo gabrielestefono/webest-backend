@@ -14,7 +14,7 @@ class Register extends BaseRegister
     {
         $user = parent::handleRegistration($data);
 
-        $user->assignRole('Customer');
+        $user->assignRole('client');
 
         return $user;
     }

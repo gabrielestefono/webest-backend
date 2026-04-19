@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Enums\Permission;
 use App\Filament\Forms\Components\ProductCards;
 use App\Models\Order;
 use App\Models\Product;
@@ -10,9 +11,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Auth;
-use \Illuminate\Contracts\Auth\Guard;
-use \Illuminate\Contracts\Auth\Factory;
+use Illuminate\Contracts\Auth\Factory;
+use Illuminate\Contracts\Auth\Guard;
 
 class OrderForm
 {
@@ -32,7 +32,7 @@ class OrderForm
                     ->columnSpanFull(),
                 ProductCards::make('product_id')
                     ->label('Produto')
-                    ->products(fn() => Product::query()
+                    ->products(fn () => Product::query()
                         ->where('active', true)
                         ->orderBy('name')
                         ->get(['id', 'name', 'description', 'base_price']))
@@ -54,7 +54,7 @@ class OrderForm
                          */
                         $user = $auth->user();
 
-                        return  $user?->hasRole('admin') ?? false;
+                        return $user?->can(Permission::ManageOrders->value) ?? false;
                     }),
             ]);
     }

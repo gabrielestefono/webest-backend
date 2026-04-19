@@ -43,6 +43,17 @@ class Order extends Model
         return self::STATUSES;
     }
 
+    /**
+     * @return list<string>
+     */
+    public static function activeStatuses(): array
+    {
+        return array_values(array_diff(array_keys(self::STATUSES), [
+            'rejected',
+            'done',
+        ]));
+    }
+
     public static function statusColor(string $status): string
     {
         return match ($status) {
