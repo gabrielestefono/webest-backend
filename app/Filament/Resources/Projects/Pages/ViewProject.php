@@ -208,6 +208,10 @@ class ViewProject extends ViewRecord
             return false;
         }
 
+        if (! $user->can(Permission::SubmitChangeRequests->value)) {
+            return false;
+        }
+
         return (int) $this->record->order?->user_id === (int) $user->id;
     }
 
@@ -215,22 +219,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canAnalyzeChangeRequests(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findAdminChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'awaiting_quote' || ! $changeRequest->canTransitionTo('quoted')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta solicitação não está disponível para cotação.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'awaiting_quote', 'quoted', 'Esta solicitação não está disponível para cotação.')) {
             return;
         }
 
@@ -267,28 +258,16 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canAnalyzeChangeRequests(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findAdminChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'requested' || ! $changeRequest->canTransitionTo('awaiting_quote')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta solicitação não pode ser aprovada neste momento.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'requested', 'awaiting_quote', 'Esta solicitação não pode ser aprovada neste momento.')) {
             return;
         }
 
         $changeRequest->update([
             'status' => 'awaiting_quote',
             'impact_price' => null,
+            'change_weight' => null,
         ]);
 
         $this->record->refresh();
@@ -305,22 +284,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canAnalyzeChangeRequests(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findAdminChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'requested' || ! $changeRequest->canTransitionTo('rejected')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta solicitação não pode ser recusada neste momento.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'requested', 'rejected', 'Esta solicitação não pode ser recusada neste momento.')) {
             return;
         }
 
@@ -342,23 +308,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canRespondToQuotes(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->where('requester_id', static::currentUser()?->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findClientChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'quoted' || ! $changeRequest->canTransitionTo('client_approved')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta cotação não está disponível para aprovação.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'quoted', 'client_approved', 'Esta cotação não está disponível para aprovação.')) {
             return;
         }
 
@@ -380,23 +332,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canRespondToQuotes(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->where('requester_id', static::currentUser()?->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findClientChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'quoted' || ! $changeRequest->canTransitionTo('rejected')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta cotação não está disponível para recusa.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'quoted', 'rejected', 'Esta cotação não está disponível para recusa.')) {
             return;
         }
 
@@ -418,23 +356,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canRespondToQuotes(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->where('requester_id', static::currentUser()?->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findClientChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'quoted' || ! $changeRequest->canTransitionTo('revision')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta cotação não está disponível para revisão.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'quoted', 'revision', 'Esta cotação não está disponível para revisão.')) {
             return;
         }
 
@@ -458,23 +382,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canRespondToQuotes(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->where('requester_id', static::currentUser()?->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findClientChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'revision' || ! $changeRequest->canTransitionTo('requested')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta solicitação não está em revisão.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'revision', 'requested', 'Esta solicitação não está em revisão.')) {
             return;
         }
 
@@ -509,22 +419,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canAnalyzeChangeRequests(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findAdminChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'client_approved' || ! $changeRequest->canTransitionTo('payment_pending')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Esta solicitação não está pronta para gerar pagamento.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'client_approved', 'payment_pending', 'Esta solicitação não está pronta para gerar pagamento.')) {
             return;
         }
 
@@ -557,16 +454,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canAnalyzeChangeRequests(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findAdminChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'payment_pending') {
+        if ((string) $changeRequest->status !== 'payment_pending') {
             Notification::make()
                 ->title('Ação inválida')
                 ->body('O status de pagamento só pode ser alterado quando está Aguardando pagamento.')
@@ -593,6 +483,16 @@ class ViewProject extends ViewRecord
                 ->title('Pagamento pendente')
                 ->body('Status mantido como Aguardando pagamento.')
                 ->success()
+                ->send();
+
+            return;
+        }
+
+        if (empty($changeRequest->payment_link)) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Defina o link de pagamento antes de confirmar como pago.')
+                ->danger()
                 ->send();
 
             return;
@@ -632,22 +532,9 @@ class ViewProject extends ViewRecord
     {
         abort_unless($this->canAnalyzeChangeRequests(), 403);
 
-        $changeRequest = ChangeRequest::query()
-            ->where('project_id', $this->record->id)
-            ->whereKey($changeRequestId)
-            ->first();
+        $changeRequest = $this->findAdminChangeRequest($changeRequestId);
 
-        if (! $changeRequest) {
-            abort(404);
-        }
-
-        if ($changeRequest->status !== 'pending_development' || ! $changeRequest->canTransitionTo('completed')) {
-            Notification::make()
-                ->title('Ação inválida')
-                ->body('Somente alterações pendentes de desenvolvimento podem ser concluídas.')
-                ->danger()
-                ->send();
-
+        if (! $this->ensureTransition($changeRequest, 'pending_development', 'completed', 'Somente alterações pendentes de desenvolvimento podem ser concluídas.')) {
             return;
         }
 
@@ -789,6 +676,50 @@ class ViewProject extends ViewRecord
             'github_url' => $this->record->github_url,
             'deploy_url' => $this->record->deploy_url,
         ];
+    }
+
+    protected function findAdminChangeRequest(int $changeRequestId): ChangeRequest
+    {
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        return $changeRequest;
+    }
+
+    protected function findClientChangeRequest(int $changeRequestId): ChangeRequest
+    {
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->where('requester_id', static::currentUser()?->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        return $changeRequest;
+    }
+
+    protected function ensureTransition(ChangeRequest $changeRequest, string $fromStatus, string $toStatus, string $message): bool
+    {
+        if ((string) $changeRequest->status === $fromStatus && $changeRequest->canTransitionTo($toStatus)) {
+            return true;
+        }
+
+        Notification::make()
+            ->title('Ação inválida')
+            ->body($message)
+            ->danger()
+            ->send();
+
+        return false;
     }
 
     protected function syncProgressFromSteps(): void
