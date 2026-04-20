@@ -43,6 +43,11 @@ class ViewProject extends ViewRecord
      */
     public array $quoteForms = [];
 
+    /**
+     * @var array<int|string, array{description?: string|null}>
+     */
+    public array $revisionForms = [];
+
     public function mount(int|string $record): void
     {
         parent::mount($record);
@@ -154,6 +159,21 @@ class ViewProject extends ViewRecord
     public function canManageProjectActions(): bool
     {
         return static::canManageProjects();
+    }
+
+    public function canRespondToQuotes(): bool
+    {
+        $user = static::currentUser();
+
+        if (! $user || ! $this->record instanceof Project) {
+            return false;
+        }
+
+        if (! $user->hasRole('client')) {
+            return false;
+        }
+
+        return (int) $this->record->order?->user_id === (int) $user->id;
     }
 
     public function submitQuote(int $changeRequestId): void
@@ -275,6 +295,172 @@ class ViewProject extends ViewRecord
         Notification::make()
             ->title('Solicitação recusada')
             ->body('A solicitação foi marcada como recusada.')
+            ->success()
+            ->send();
+    }
+
+    public function approveQuotedChangeRequest(int $changeRequestId): void
+    {
+        abort_unless($this->canRespondToQuotes(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->where('requester_id', static::currentUser()?->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'quoted' || ! $changeRequest->canTransitionTo('client_approved')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Esta cotação não está disponível para aprovação.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $changeRequest->update([
+            'status' => 'client_approved',
+        ]);
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Cotação aprovada')
+            ->body('A cotação foi aprovada com sucesso.')
+            ->success()
+            ->send();
+    }
+
+    public function rejectQuotedChangeRequest(int $changeRequestId): void
+    {
+        abort_unless($this->canRespondToQuotes(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->where('requester_id', static::currentUser()?->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'quoted' || ! $changeRequest->canTransitionTo('rejected')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Esta cotação não está disponível para recusa.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $changeRequest->update([
+            'status' => 'rejected',
+        ]);
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Cotação recusada')
+            ->body('A cotação foi recusada.')
+            ->success()
+            ->send();
+    }
+
+    public function startQuotedChangeRevision(int $changeRequestId): void
+    {
+        abort_unless($this->canRespondToQuotes(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->where('requester_id', static::currentUser()?->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'quoted' || ! $changeRequest->canTransitionTo('revision')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Esta cotação não está disponível para revisão.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $changeRequest->update([
+            'status' => 'revision',
+        ]);
+
+        $this->revisionForms[$changeRequestId]['description'] = $changeRequest->description;
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Revisão iniciada')
+            ->body('Atualize a descrição e salve para reenviar a solicitação.')
+            ->success()
+            ->send();
+    }
+
+    public function submitChangeRevision(int $changeRequestId): void
+    {
+        abort_unless($this->canRespondToQuotes(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->where('requester_id', static::currentUser()?->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'revision' || ! $changeRequest->canTransitionTo('requested')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Esta solicitação não está em revisão.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $field = "revisionForms.{$changeRequestId}.description";
+
+        $validated = $this->validate([
+            $field => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+
+        $newDescription = (string) data_get($validated, $field);
+
+        $changeRequest->update([
+            'description' => $newDescription,
+            'status' => 'requested',
+            'impact_price' => null,
+        ]);
+
+        unset($this->revisionForms[$changeRequestId]);
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Solicitação reenviada')
+            ->body('A descrição foi atualizada e a solicitação voltou para Pedido de alteração.')
             ->success()
             ->send();
     }

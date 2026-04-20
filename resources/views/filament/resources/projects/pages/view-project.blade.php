@@ -223,6 +223,16 @@
                 <div style="border: 1px solid #e5e7eb; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
                     <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #111827;">Solicitações de mudança</h3>
 
+                    @php
+                        $sortedChangeRequests = $record->changeRequests
+                            ->sortByDesc('created_at');
+
+                        [$clientApprovedChangeRequests, $otherChangeRequests] = $sortedChangeRequests
+                            ->partition(fn ($changeRequest) => $changeRequest->status === 'client_approved');
+
+                        $sortedChangeRequests = $clientApprovedChangeRequests->concat($otherChangeRequests);
+                    @endphp
+
                     @if($this->canCreateChangeRequest())
                         <form wire:submit="submitChangeRequest" style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
                             <div>
@@ -250,8 +260,19 @@
                     @endif
 
                     <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
-                        @forelse($record->changeRequests->sortByDesc('created_at')->take(3) as $changeRequest)
-                            <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px 16px;">
+                        @forelse($sortedChangeRequests as $changeRequest)
+                            @php
+                                $isClientApproved = $changeRequest->status === 'client_approved';
+                                $cardStyle = $isClientApproved
+                                    ? 'border: 1px solid #10b981; border-radius: 14px; padding: 12px 16px; background: #ecfdf5;'
+                                    : 'border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px 16px;';
+                            @endphp
+                            <div style="<?php echo e($cardStyle); ?>">
+                                @if($isClientApproved)
+                                    <div style="display: inline-flex; align-items: center; border-radius: 9999px; background: #047857; color: #ffffff; font-size: 11px; font-weight: 700; padding: 3px 8px; margin-bottom: 6px;">
+                                        Aprovado pelo cliente
+                                    </div>
+                                @endif
                                 <div style="font-weight: 600; color: #111827;">{{ \App\Models\ChangeRequest::STATUSES[$changeRequest->status] ?? $changeRequest->status }}</div>
                                 <div style="margin-top: 4px; color: #6b7280;">{{ $changeRequest->description }}</div>
                                 <div style="margin-top: 8px; font-size: 12px; color: #9ca3af;">
@@ -304,6 +325,57 @@
                                         >
                                             Enviar cotação
                                         </button>
+                                    </form>
+                                @endif
+
+                                @if($this->canRespondToQuotes() && $changeRequest->status === 'quoted')
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                                        <button
+                                            type="button"
+                                            wire:click="approveQuotedChangeRequest({{ $changeRequest->id }})"
+                                            style="border: none; border-radius: 6px; background: #065f46; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                        >
+                                            Aprovar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            wire:click="rejectQuotedChangeRequest({{ $changeRequest->id }})"
+                                            style="border: none; border-radius: 6px; background: #991b1b; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                        >
+                                            Reprovar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            wire:click="startQuotedChangeRevision({{ $changeRequest->id }})"
+                                            style="border: none; border-radius: 6px; background: #1d4ed8; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                        >
+                                            Alterar
+                                        </button>
+                                    </div>
+                                @endif
+
+                                @if($this->canRespondToQuotes() && $changeRequest->status === 'revision')
+                                    <form wire:submit="submitChangeRevision({{ $changeRequest->id }})" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                                        <div>
+                                            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #4b5563;">Descrição revisada</label>
+                                            <textarea
+                                                rows="4"
+                                                wire:model="revisionForms.{{ $changeRequest->id }}.description"
+                                                placeholder="Descreva o ajuste da solicitação"
+                                                style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px;"
+                                            ></textarea>
+                                            @error('revisionForms.' . $changeRequest->id . '.description')
+                                                <div style="margin-top: 4px; font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                        <div>
+                                            <button
+                                                type="submit"
+                                                style="border: none; border-radius: 6px; background: #1f2937; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                            >
+                                                Salvar revisão
+                                            </button>
+                                        </div>
                                     </form>
                                 @endif
                             </div>
