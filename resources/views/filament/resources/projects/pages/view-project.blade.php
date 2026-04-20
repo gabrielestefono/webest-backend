@@ -34,9 +34,7 @@
                 </div>
                 <div style="width: 100%; height: 12px; overflow: hidden; border-radius: 9999px; background: #e5e7eb;">
                     <div
-                        style="height: 100%; border-radius: 9999px; background: #4f46e5; transition: width 200ms ease;"
-                        x-data="{ progress: {{ $this->progressPercentage() }} }"
-                        x-bind:style="`width: ${progress}%`"
+                        style="height: 100%; border-radius: 9999px; background: #4f46e5; transition: width 200ms ease; width: <?php echo e($this->progressPercentage()); ?>%;"
                     ></div>
                 </div>
             </div>
