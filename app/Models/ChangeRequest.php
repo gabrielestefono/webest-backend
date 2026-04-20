@@ -11,9 +11,12 @@ class ChangeRequest extends Model
     use HasFactory;
 
     public const STATUSES = [
-        'pending',
-        'approved',
-        'rejected',
+        'requested' => 'Solicitada',
+        'quoted' => 'Orçada',
+        'client_approved' => 'Aprovada pelo cliente',
+        'payment_pending' => 'Aguardando pagamento',
+        'paid' => 'Paga',
+        'rejected' => 'Rejeitada',
     ];
 
     /**
@@ -27,6 +30,7 @@ class ChangeRequest extends Model
         'description',
         'status',
         'impact_price',
+        'payment_link',
     ];
 
     /**
@@ -38,7 +42,26 @@ class ChangeRequest extends Model
     {
         return [
             'impact_price' => 'decimal:2',
+            'status' => 'string',
         ];
+    }
+
+    public static function statusOptions(): array
+    {
+        return self::STATUSES;
+    }
+
+    public static function statusColor(string $status): string
+    {
+        return match ($status) {
+            'requested' => 'warning',
+            'quoted' => 'info',
+            'client_approved' => 'primary',
+            'payment_pending' => 'warning',
+            'paid' => 'success',
+            'rejected' => 'danger',
+            default => 'gray',
+        };
     }
 
     public function project(): BelongsTo
