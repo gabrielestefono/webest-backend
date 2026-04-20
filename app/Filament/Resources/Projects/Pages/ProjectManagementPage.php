@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Projects\Pages;
 
 use App\Enums\Permission;
 use App\Filament\Resources\Projects\ProjectResource;
+use App\Models\ChangeRequest;
 use App\Models\Project;
 use App\Models\ProjectStep;
 use App\Models\User;
@@ -29,6 +30,11 @@ class ProjectManagementPage extends ViewRecord
         'title' => '',
         'weight' => 1,
     ];
+
+    /**
+     * @var array<int|string, array{impact_price?: string|int|float|null}>
+     */
+    public array $quoteForms = [];
 
     public function mount(int|string $record): void
     {
@@ -159,6 +165,62 @@ class ProjectManagementPage extends ViewRecord
         return (int) $this->record->current_progress;
     }
 
+    public function canAnalyzeChangeRequests(): bool
+    {
+        $user = static::currentUser();
+
+        return $user instanceof User
+            && $user->can(Permission::ManageChangeRequests->value);
+    }
+
+    public function submitQuote(int $changeRequestId): void
+    {
+        abort_unless($this->canAnalyzeChangeRequests(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'requested' || ! $changeRequest->canTransitionTo('quoted')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Esta solicitação não está disponível para cotação.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $field = "quoteForms.{$changeRequestId}.impact_price";
+
+        $validated = $this->validate([
+            $field => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $impactPrice = (float) data_get($validated, $field);
+
+        $changeRequest->update([
+            'impact_price' => $impactPrice,
+            'status' => 'quoted',
+        ]);
+
+        unset($this->quoteForms[$changeRequestId]);
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Cotação enviada')
+            ->body('Solicitação analisada e movida para Orçada.')
+            ->success()
+            ->send();
+    }
+
     public function completedStepsCount(): int
     {
         return $this->record->steps->where('is_completed', true)->count();
@@ -171,7 +233,7 @@ class ProjectManagementPage extends ViewRecord
 
     protected function fillQuickData(): void
     {
-        $this->record->loadMissing(['order.user', 'order.product', 'steps']);
+        $this->record->loadMissing(['order.user', 'order.product', 'steps', 'changeRequests.requester']);
 
         $this->quickData = [
             'payment_status' => $this->record->payment_status,
@@ -205,8 +267,15 @@ class ProjectManagementPage extends ViewRecord
 
     protected static function canManageProjects(): bool
     {
-        $user = Auth::user();
+        $user = static::currentUser();
 
         return $user instanceof User && $user->can(Permission::ManageProjects->value);
+    }
+
+    protected static function currentUser(): ?User
+    {
+        $user = Auth::user();
+
+        return $user instanceof User ? $user : null;
     }
 }

@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Projects\Tables;
 
 use App\Enums\Permission;
 use App\Models\User;
-use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -90,8 +89,6 @@ class ProjectsTable
             ])
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make()
-                    ->visible(fn (): bool => static::canManageProjects()),
             ]);
     }
 

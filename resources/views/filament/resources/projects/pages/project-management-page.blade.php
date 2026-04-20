@@ -1,6 +1,6 @@
 <x-filament-panels::page>
     @php
-        $record->loadMissing(['order.user', 'order.product', 'steps']);
+        $record->loadMissing(['order.user', 'order.product', 'steps', 'changeRequests.requester']);
     @endphp
 
     <div style="display: flex; flex-direction: column; gap: 24px;">
@@ -138,6 +138,56 @@
                     @empty
                         <div style="border: 1px dashed #d1d5db; border-radius: 12px; padding: 14px; font-size: 14px; color: #6b7280;">
                             Nenhuma etapa cadastrada para este projeto.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+
+            <div style="border: 1px solid #e5e7eb; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #111827;">Solicitações de mudança</h3>
+
+                <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
+                    @forelse($record->changeRequests->sortByDesc('created_at')->take(10) as $changeRequest)
+                        <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px 16px;">
+                            <div style="font-weight: 600; color: #111827;">{{ \App\Models\ChangeRequest::STATUSES[$changeRequest->status] ?? $changeRequest->status }}</div>
+                            <div style="margin-top: 4px; color: #6b7280;">{{ $changeRequest->description }}</div>
+                            <div style="margin-top: 8px; font-size: 12px; color: #9ca3af;">
+                                @if($changeRequest->impact_price === null)
+                                    Impacto não informado
+                                @else
+                                    R$ {{ number_format((float) $changeRequest->impact_price, 2, ',', '.') }}
+                                @endif
+                            </div>
+
+                            @if($this->canAnalyzeChangeRequests() && $changeRequest->status === 'requested')
+                                <form wire:submit="submitQuote({{ $changeRequest->id }})" style="display: flex; align-items: end; gap: 8px; margin-top: 10px;">
+                                    <div style="display: flex; flex-direction: column; gap: 4px; min-width: 180px;">
+                                        <label style="font-size: 12px; color: #4b5563;">Impacto (R$)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            wire:model="quoteForms.{{ $changeRequest->id }}.impact_price"
+                                            placeholder="0,00"
+                                            style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; font-size: 13px;"
+                                        />
+                                        @error('quoteForms.' . $changeRequest->id . '.impact_price')
+                                            <div style="font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        style="border: none; border-radius: 6px; background: #1f2937; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                    >
+                                        Enviar cotação
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
+                    @empty
+                        <div style="border: 1px dashed #d1d5db; border-radius: 14px; padding: 12px 16px; color: #6b7280;">
+                            Nenhuma solicitação de mudança registrada.
                         </div>
                     @endforelse
                 </div>

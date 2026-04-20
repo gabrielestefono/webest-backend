@@ -12,6 +12,7 @@ class ChangeRequest extends Model
 
     public const STATUSES = [
         'requested' => 'Pedido de alteração',
+        'awaiting_quote' => 'Aguardando orçamento',
         'quoted' => 'Orçada',
         'revision' => 'Em revisão',
         'client_approved' => 'Aprovada pelo cliente',
@@ -27,7 +28,8 @@ class ChangeRequest extends Model
     ];
 
     public const ALLOWED_TRANSITIONS = [
-        'requested' => ['quoted', 'rejected'],
+        'requested' => ['awaiting_quote', 'rejected'],
+        'awaiting_quote' => ['quoted', 'rejected'],
         'quoted' => ['client_approved', 'rejected', 'revision'],
         'revision' => ['requested'],
         'client_approved' => ['payment_pending'],
@@ -73,6 +75,7 @@ class ChangeRequest extends Model
     {
         return match ($status) {
             'requested' => 'warning',
+            'awaiting_quote' => 'info',
             'quoted' => 'info',
             'revision' => 'primary',
             'client_approved' => 'primary',

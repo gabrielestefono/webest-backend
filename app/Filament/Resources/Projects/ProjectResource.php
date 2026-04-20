@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Projects;
 
 use App\Enums\Permission;
 use App\Filament\Resources\Projects\Pages\ListProjects;
-use App\Filament\Resources\Projects\Pages\ProjectManagementPage;
 use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
 use App\Filament\Resources\Projects\Tables\ProjectsTable;
@@ -148,7 +147,6 @@ class ProjectResource extends Resource
         return [
             'index' => ListProjects::route('/'),
             'view' => ViewProject::route('/{record}'),
-            'edit' => ProjectManagementPage::route('/{record}/manage'),
         ];
     }
 
