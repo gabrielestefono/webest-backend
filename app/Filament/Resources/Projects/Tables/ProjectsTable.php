@@ -20,17 +20,27 @@ class ProjectsTable
                 /** @var User|null $user */
                 $user = Auth::user();
 
+                $query->withCount([
+                    'changeRequests as pending_change_requests_count' => static function (Builder $changeRequestsQuery): void {
+                        $changeRequestsQuery->where('status', 'requested');
+                    },
+                ]);
+
                 if (! $user) {
                     return $query->whereKey(-1);
                 }
 
                 if ($user->can(Permission::ManageProjects->value)) {
-                    return $query;
+                    return $query
+                        ->orderByDesc('pending_change_requests_count')
+                        ->orderByDesc('updated_at');
                 }
 
                 return $query->whereHas('order', function (Builder $orderQuery) use ($user): void {
                     $orderQuery->where('user_id', $user->id);
-                });
+                })
+                    ->orderByDesc('pending_change_requests_count')
+                    ->orderByDesc('updated_at');
             })
             ->columns([
                 TextColumn::make('id')
@@ -42,6 +52,11 @@ class ProjectsTable
                 TextColumn::make('order.user.name')
                     ->label('Cliente')
                     ->searchable()
+                    ->sortable(),
+                TextColumn::make('pending_change_requests_count')
+                    ->label('Pendências')
+                    ->badge()
+                    ->color(static fn (int|string|null $state): string => (int) $state > 0 ? 'warning' : 'gray')
                     ->sortable(),
                 TextColumn::make('payment_status')
                     ->label('Pagamento')

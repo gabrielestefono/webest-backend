@@ -36,6 +36,28 @@ class ProjectResource extends Resource
         return (bool) static::currentUser()?->can(Permission::ManageProjects->value);
     }
 
+    public static function getNavigationBadge(): ?string
+    {
+        $user = static::currentUser();
+
+        if (! $user || ! $user->can(Permission::ManageProjects->value)) {
+            return null;
+        }
+
+        $pendingProjectsCount = Project::query()
+            ->whereHas('changeRequests', static function (Builder $changeRequestsQuery): void {
+                $changeRequestsQuery->where('status', 'requested');
+            })
+            ->count();
+
+        return $pendingProjectsCount > 0 ? (string) $pendingProjectsCount : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
     public static function canViewAny(): bool
     {
         $user = static::currentUser();
