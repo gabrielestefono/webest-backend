@@ -223,6 +223,18 @@
                 <div style="border: 1px solid #e5e7eb; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
                     <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #111827;">Solicitações de mudança</h3>
 
+                    <div style="margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; background: #f9fafb;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: #4b5563; margin-bottom: 6px;">
+                            <span>Execução das alterações</span>
+                            <span>{{ $this->changeProgressPercentage() }}% ({{ $this->completedChangeWeight() }}/{{ $this->totalChangeWeight() }})</span>
+                        </div>
+                        <div style="width: 100%; height: 8px; overflow: hidden; border-radius: 9999px; background: #e5e7eb;">
+                            <div
+                                style="height: 100%; border-radius: 9999px; background: #10b981; transition: width 200ms ease; width: <?php echo e($this->changeProgressPercentage()); ?>%;"
+                            ></div>
+                        </div>
+                    </div>
+
                     @php
                         $sortedChangeRequests = $record->changeRequests
                             ->sortByDesc('created_at');
@@ -282,6 +294,13 @@
                                         R$ {{ number_format((float) $changeRequest->impact_price, 2, ',', '.') }}
                                     @endif
                                 </div>
+                                <div style="margin-top: 4px; font-size: 12px; color: #9ca3af;">
+                                    @if($changeRequest->change_weight === null)
+                                        Percentual não informado
+                                    @else
+                                        Percentual da alteração: {{ (int) $changeRequest->change_weight }}%
+                                    @endif
+                                </div>
 
                                 @if($this->canAnalyzeChangeRequests() && $changeRequest->status === 'requested')
                                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
@@ -303,7 +322,7 @@
                                 @endif
 
                                 @if($this->canAnalyzeChangeRequests() && $changeRequest->status === 'awaiting_quote')
-                                    <form wire:submit="submitQuote({{ $changeRequest->id }})" style="display: flex; align-items: end; gap: 8px; margin-top: 10px;">
+                                    <form wire:submit="submitQuote({{ $changeRequest->id }})" style="display: flex; align-items: end; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
                                         <div style="display: flex; flex-direction: column; gap: 4px; min-width: 180px;">
                                             <label style="font-size: 12px; color: #4b5563;">Impacto (R$)</label>
                                             <input
@@ -315,6 +334,22 @@
                                                 style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; font-size: 13px;"
                                             />
                                             @error('quoteForms.' . $changeRequest->id . '.impact_price')
+                                                <div style="font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 180px;">
+                                            <label style="font-size: 12px; color: #4b5563;">Percentual da alteração (%)</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="100"
+                                                step="1"
+                                                wire:model="quoteForms.{{ $changeRequest->id }}.change_weight"
+                                                placeholder="Ex.: 20"
+                                                style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; font-size: 13px;"
+                                            />
+                                            @error('quoteForms.' . $changeRequest->id . '.change_weight')
                                                 <div style="font-size: 12px; color: #dc2626;">{{ $message }}</div>
                                             @enderror
                                         </div>
@@ -377,6 +412,79 @@
                                             </button>
                                         </div>
                                     </form>
+                                @endif
+
+                                @if($this->canAnalyzeChangeRequests() && $changeRequest->status === 'client_approved')
+                                    <form wire:submit="generatePaymentLink({{ $changeRequest->id }})" style="display: flex; align-items: end; gap: 8px; margin-top: 10px;">
+                                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 260px; flex: 1;">
+                                            <label style="font-size: 12px; color: #4b5563;">Link de pagamento</label>
+                                            <input
+                                                type="url"
+                                                wire:model="paymentForms.{{ $changeRequest->id }}.payment_link"
+                                                placeholder="https://..."
+                                                style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; font-size: 13px;"
+                                            />
+                                            @error('paymentForms.' . $changeRequest->id . '.payment_link')
+                                                <div style="font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            style="border: none; border-radius: 6px; background: #1f2937; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                        >
+                                            Gerar pagamento
+                                        </button>
+                                    </form>
+                                @endif
+
+                                @if($changeRequest->status === 'payment_pending' && $changeRequest->payment_link && $this->canRespondToQuotes())
+                                    <div style="margin-top: 10px;">
+                                        <a
+                                            href="{{ $changeRequest->payment_link }}"
+                                            target="_blank"
+                                            style="display: inline-flex; align-items: center; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #111827; text-decoration: none;"
+                                        >
+                                            Abrir link de pagamento
+                                        </a>
+                                    </div>
+                                @endif
+
+                                @if($this->canAnalyzeChangeRequests() && $changeRequest->status === 'payment_pending')
+                                    <form wire:submit="updatePaymentStatus({{ $changeRequest->id }})" style="display: flex; align-items: end; gap: 8px; margin-top: 10px;">
+                                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 220px;">
+                                            <label style="font-size: 12px; color: #4b5563;">Status do pagamento</label>
+                                            <select
+                                                wire:model="paymentForms.{{ $changeRequest->id }}.payment_status"
+                                                style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; font-size: 13px;"
+                                            >
+                                                <option value="pending">Pendente</option>
+                                                <option value="paid">Pago</option>
+                                            </select>
+                                            @error('paymentForms.' . $changeRequest->id . '.payment_status')
+                                                <div style="font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            style="border: none; border-radius: 6px; background: #1f2937; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                        >
+                                            Atualizar pagamento
+                                        </button>
+                                    </form>
+                                @endif
+
+                                @if($this->canAnalyzeChangeRequests() && $changeRequest->status === 'pending_development')
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                                        <button
+                                            type="button"
+                                            wire:click="markChangeRequestAsCompleted({{ $changeRequest->id }})"
+                                            style="border: none; border-radius: 6px; background: #065f46; color: #ffffff; cursor: pointer; padding: 7px 10px; font-size: 12px;"
+                                        >
+                                            Marcar como concluída
+                                        </button>
+                                    </div>
                                 @endif
                             </div>
                         @empty

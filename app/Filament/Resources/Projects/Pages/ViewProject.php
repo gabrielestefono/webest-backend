@@ -39,9 +39,14 @@ class ViewProject extends ViewRecord
     ];
 
     /**
-     * @var array<int|string, array{impact_price?: string|int|float|null}>
+     * @var array<int|string, array{impact_price?: string|int|float|null, change_weight?: string|int|null}>
      */
     public array $quoteForms = [];
+
+    /**
+     * @var array<int|string, array{payment_link?: string|null, payment_status?: string|null}>
+     */
+    public array $paymentForms = [];
 
     /**
      * @var array<int|string, array{description?: string|null}>
@@ -92,6 +97,35 @@ class ViewProject extends ViewRecord
         return (int) $this->record->steps->sum('weight');
     }
 
+    public function totalChangeWeight(): int
+    {
+        return (int) ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->whereIn('status', ['pending_development', 'completed'])
+            ->whereNotNull('change_weight')
+            ->sum('change_weight');
+    }
+
+    public function completedChangeWeight(): int
+    {
+        return (int) ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->where('status', 'completed')
+            ->whereNotNull('change_weight')
+            ->sum('change_weight');
+    }
+
+    public function changeProgressPercentage(): int
+    {
+        $totalChangeWeight = $this->totalChangeWeight();
+
+        if ($totalChangeWeight <= 0) {
+            return 0;
+        }
+
+        return (int) round(($this->completedChangeWeight() / $totalChangeWeight) * 100);
+    }
+
     public function canCreateChangeRequest(): bool
     {
         $user = static::currentUser();
@@ -131,6 +165,7 @@ class ViewProject extends ViewRecord
             'description' => $validated['newChangeRequest']['description'],
             'status' => 'requested',
             'impact_price' => null,
+            'change_weight' => null,
             'payment_link' => null,
         ]);
 
@@ -200,15 +235,19 @@ class ViewProject extends ViewRecord
         }
 
         $field = "quoteForms.{$changeRequestId}.impact_price";
+        $weightField = "quoteForms.{$changeRequestId}.change_weight";
 
         $validated = $this->validate([
             $field => ['required', 'numeric', 'min:0'],
+            $weightField => ['required', 'integer', 'min:1', 'max:100'],
         ]);
 
         $impactPrice = (float) data_get($validated, $field);
+        $changeWeight = (int) data_get($validated, $weightField);
 
         $changeRequest->update([
             'impact_price' => $impactPrice,
+            'change_weight' => $changeWeight,
             'status' => 'quoted',
         ]);
 
@@ -451,6 +490,7 @@ class ViewProject extends ViewRecord
             'description' => $newDescription,
             'status' => 'requested',
             'impact_price' => null,
+            'change_weight' => null,
         ]);
 
         unset($this->revisionForms[$changeRequestId]);
@@ -461,6 +501,166 @@ class ViewProject extends ViewRecord
         Notification::make()
             ->title('Solicitação reenviada')
             ->body('A descrição foi atualizada e a solicitação voltou para Pedido de alteração.')
+            ->success()
+            ->send();
+    }
+
+    public function generatePaymentLink(int $changeRequestId): void
+    {
+        abort_unless($this->canAnalyzeChangeRequests(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'client_approved' || ! $changeRequest->canTransitionTo('payment_pending')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Esta solicitação não está pronta para gerar pagamento.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $field = "paymentForms.{$changeRequestId}.payment_link";
+
+        $validated = $this->validate([
+            $field => ['required', 'url', 'max:255'],
+        ]);
+
+        $paymentLink = (string) data_get($validated, $field);
+
+        $changeRequest->update([
+            'payment_link' => $paymentLink,
+            'status' => 'payment_pending',
+        ]);
+
+        $this->paymentForms[$changeRequestId]['payment_status'] = 'pending';
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Pagamento gerado')
+            ->body('Link de pagamento registrado e status alterado para Aguardando pagamento.')
+            ->success()
+            ->send();
+    }
+
+    public function updatePaymentStatus(int $changeRequestId): void
+    {
+        abort_unless($this->canAnalyzeChangeRequests(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'payment_pending') {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('O status de pagamento só pode ser alterado quando está Aguardando pagamento.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        if (! isset($this->paymentForms[$changeRequestId]['payment_status'])) {
+            $this->paymentForms[$changeRequestId]['payment_status'] = 'pending';
+        }
+
+        $field = "paymentForms.{$changeRequestId}.payment_status";
+
+        $validated = $this->validate([
+            $field => ['required', 'string', 'in:pending,paid'],
+        ]);
+
+        $selectedStatus = (string) data_get($validated, $field);
+
+        if ($selectedStatus === 'pending') {
+            Notification::make()
+                ->title('Pagamento pendente')
+                ->body('Status mantido como Aguardando pagamento.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        if (! $changeRequest->canTransitionTo('paid')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Não foi possível confirmar pagamento nesta etapa.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $changeRequest->update([
+            'status' => 'paid',
+        ]);
+
+        if ($changeRequest->canTransitionTo('pending_development')) {
+            $changeRequest->update([
+                'status' => 'pending_development',
+            ]);
+        }
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Pagamento confirmado')
+            ->body('Solicitação movida para Pendente desenvolvimento.')
+            ->success()
+            ->send();
+    }
+
+    public function markChangeRequestAsCompleted(int $changeRequestId): void
+    {
+        abort_unless($this->canAnalyzeChangeRequests(), 403);
+
+        $changeRequest = ChangeRequest::query()
+            ->where('project_id', $this->record->id)
+            ->whereKey($changeRequestId)
+            ->first();
+
+        if (! $changeRequest) {
+            abort(404);
+        }
+
+        if ($changeRequest->status !== 'pending_development' || ! $changeRequest->canTransitionTo('completed')) {
+            Notification::make()
+                ->title('Ação inválida')
+                ->body('Somente alterações pendentes de desenvolvimento podem ser concluídas.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $changeRequest->update([
+            'status' => 'completed',
+        ]);
+
+        $this->record->refresh();
+        $this->record->loadMissing(['changeRequests.requester']);
+
+        Notification::make()
+            ->title('Alteração concluída')
+            ->body('A alteração foi marcada como concluída e entrou no cálculo de progresso.')
             ->success()
             ->send();
     }

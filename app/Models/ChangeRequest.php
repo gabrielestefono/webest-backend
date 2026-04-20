@@ -19,12 +19,13 @@ class ChangeRequest extends Model
         'payment_pending' => 'Aguardando pagamento',
         'paid' => 'Paga',
         'pending_development' => 'Pendente desenvolvimento',
+        'completed' => 'Concluída',
         'rejected' => 'Rejeitada',
     ];
 
     public const FINAL_STATUSES = [
         'rejected',
-        'pending_development',
+        'completed',
     ];
 
     public const ALLOWED_TRANSITIONS = [
@@ -35,7 +36,8 @@ class ChangeRequest extends Model
         'client_approved' => ['payment_pending'],
         'payment_pending' => ['paid', 'rejected'],
         'paid' => ['pending_development'],
-        'pending_development' => [],
+        'pending_development' => ['completed'],
+        'completed' => [],
         'rejected' => [],
     ];
 
@@ -50,6 +52,7 @@ class ChangeRequest extends Model
         'description',
         'status',
         'impact_price',
+        'change_weight',
         'payment_link',
     ];
 
@@ -62,6 +65,7 @@ class ChangeRequest extends Model
     {
         return [
             'impact_price' => 'decimal:2',
+            'change_weight' => 'integer',
             'status' => 'string',
         ];
     }
@@ -82,6 +86,7 @@ class ChangeRequest extends Model
             'payment_pending' => 'warning',
             'paid' => 'success',
             'pending_development' => 'gray',
+            'completed' => 'success',
             'rejected' => 'danger',
             default => 'gray',
         };
