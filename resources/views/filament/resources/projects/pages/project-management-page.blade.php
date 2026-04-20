@@ -66,6 +66,43 @@
             <div style="border: 1px solid #e5e7eb; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
                 <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #111827;">Avanço de etapas</h3>
 
+                <form wire:submit="createStep" style="display: grid; grid-template-columns: 1fr 120px auto; gap: 10px; margin-top: 16px; margin-bottom: 12px;">
+                    <div>
+                        <input
+                            type="text"
+                            wire:model="newStep.title"
+                            placeholder="Nome da nova etapa"
+                            style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px; font-size: 14px;"
+                        />
+                        @error('newStep.title')
+                            <div style="margin-top: 6px; font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            wire:model="newStep.weight"
+                            placeholder="Peso"
+                            style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px; font-size: 14px;"
+                        />
+                        @error('newStep.weight')
+                            <div style="margin-top: 6px; font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <button
+                            type="submit"
+                            style="border: none; border-radius: 6px; background: #111827; color: #ffffff; cursor: pointer; padding: 8px 14px; font-size: 13px;"
+                        >
+                            Adicionar etapa
+                        </button>
+                    </div>
+                </form>
+
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                     @forelse($record->steps->sortBy('id') as $step)
                         @php
@@ -88,6 +125,13 @@
                                     style="<?php echo e($stepButtonStyle); ?>"
                                 >
                                     {{ $step->is_completed ? 'Reabrir' : 'Concluir' }}
+                                </button>
+                                <button
+                                    type="button"
+                                    wire:click="deleteStep({{ $step->id }})"
+                                    style="border: 1px solid #fca5a5; border-radius: 6px; background: #fee2e2; color: #991b1b; cursor: pointer; padding: 6px 10px; font-size: 12px;"
+                                >
+                                    Remover
                                 </button>
                             </div>
                         </div>

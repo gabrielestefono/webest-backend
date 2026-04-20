@@ -112,13 +112,44 @@
 
                 <div style="border: 1px solid #e5e7eb; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
                     <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #111827;">Solicitações de mudança</h3>
+
+                    @if($this->canCreateChangeRequest())
+                        <form wire:submit="submitChangeRequest" style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #374151;">Descrição da alteração</label>
+                                <textarea
+                                    wire:model="newChangeRequest.description"
+                                    rows="4"
+                                    placeholder="Descreva a alteração que você precisa no projeto"
+                                    style="width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px; font-size: 14px;"
+                                ></textarea>
+                                @error('newChangeRequest.description')
+                                    <div style="margin-top: 6px; font-size: 12px; color: #dc2626;">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <button
+                                    type="submit"
+                                    style="border: none; border-radius: 6px; background: #111827; color: #ffffff; cursor: pointer; padding: 8px 14px; font-size: 13px;"
+                                >
+                                    Solicitar alteração
+                                </button>
+                            </div>
+                        </form>
+                    @endif
+
                     <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
                         @forelse($record->changeRequests->sortByDesc('created_at')->take(3) as $changeRequest)
                             <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px 16px;">
-                                <div style="font-weight: 600; color: #111827;">{{ ucfirst($changeRequest->status) }}</div>
+                                <div style="font-weight: 600; color: #111827;">{{ \App\Models\ChangeRequest::STATUSES[$changeRequest->status] ?? $changeRequest->status }}</div>
                                 <div style="margin-top: 4px; color: #6b7280;">{{ $changeRequest->description }}</div>
                                 <div style="margin-top: 8px; font-size: 12px; color: #9ca3af;">
-                                    {{ $changeRequest->requester?->name }} · R$ {{ number_format((float) $changeRequest->impact_price, 2, ',', '.') }}
+                                    @if($changeRequest->impact_price === null)
+                                        Impacto não informado
+                                    @else
+                                        R$ {{ number_format((float) $changeRequest->impact_price, 2, ',', '.') }}
+                                    @endif
                                 </div>
                             </div>
                         @empty

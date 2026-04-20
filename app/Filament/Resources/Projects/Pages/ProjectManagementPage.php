@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Projects\Pages;
 use App\Enums\Permission;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\Project;
+use App\Models\ProjectStep;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
@@ -20,6 +21,14 @@ class ProjectManagementPage extends ViewRecord
      * @var array<string, mixed>
      */
     public array $quickData = [];
+
+    /**
+     * @var array{title: string, weight: int}
+     */
+    public array $newStep = [
+        'title' => '',
+        'weight' => 1,
+    ];
 
     public function mount(int|string $record): void
     {
@@ -83,6 +92,64 @@ class ProjectManagementPage extends ViewRecord
         Notification::make()
             ->title('Etapa atualizada')
             ->body($shouldComplete ? 'Etapa marcada como concluída.' : 'Etapa marcada como pendente.')
+            ->success()
+            ->send();
+    }
+
+    public function createStep(): void
+    {
+        abort_unless(static::canManageProjects(), 403);
+
+        $validated = $this->validate([
+            'newStep.title' => ['required', 'string', 'min:3', 'max:120'],
+            'newStep.weight' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        ProjectStep::query()->create([
+            'project_id' => $this->record->id,
+            'title' => $validated['newStep']['title'],
+            'weight' => (int) $validated['newStep']['weight'],
+            'is_completed' => false,
+            'completed_at' => null,
+        ]);
+
+        $this->newStep = [
+            'title' => '',
+            'weight' => 1,
+        ];
+
+        $this->syncProgressFromSteps();
+
+        $this->record->refresh();
+        $this->record->load('steps');
+
+        Notification::make()
+            ->title('Etapa criada')
+            ->body('Nova etapa adicionada com sucesso.')
+            ->success()
+            ->send();
+    }
+
+    public function deleteStep(int $stepId): void
+    {
+        abort_unless(static::canManageProjects(), 403);
+
+        $step = $this->record->steps()->whereKey($stepId)->first();
+
+        if (! $step) {
+            abort(404);
+        }
+
+        $step->delete();
+
+        $this->syncProgressFromSteps();
+
+        $this->record->refresh();
+        $this->record->load('steps');
+
+        Notification::make()
+            ->title('Etapa removida')
+            ->body('A etapa foi removida com sucesso.')
             ->success()
             ->send();
     }

@@ -11,12 +11,30 @@ class ChangeRequest extends Model
     use HasFactory;
 
     public const STATUSES = [
-        'requested' => 'Solicitada',
+        'requested' => 'Pedido de alteração',
         'quoted' => 'Orçada',
+        'revision' => 'Em revisão',
         'client_approved' => 'Aprovada pelo cliente',
         'payment_pending' => 'Aguardando pagamento',
         'paid' => 'Paga',
+        'pending_development' => 'Pendente desenvolvimento',
         'rejected' => 'Rejeitada',
+    ];
+
+    public const FINAL_STATUSES = [
+        'rejected',
+        'pending_development',
+    ];
+
+    public const ALLOWED_TRANSITIONS = [
+        'requested' => ['quoted', 'rejected'],
+        'quoted' => ['client_approved', 'rejected', 'revision'],
+        'revision' => ['requested'],
+        'client_approved' => ['payment_pending'],
+        'payment_pending' => ['paid', 'rejected'],
+        'paid' => ['pending_development'],
+        'pending_development' => [],
+        'rejected' => [],
     ];
 
     /**
@@ -56,12 +74,26 @@ class ChangeRequest extends Model
         return match ($status) {
             'requested' => 'warning',
             'quoted' => 'info',
+            'revision' => 'primary',
             'client_approved' => 'primary',
             'payment_pending' => 'warning',
             'paid' => 'success',
+            'pending_development' => 'gray',
             'rejected' => 'danger',
             default => 'gray',
         };
+    }
+
+    public function canTransitionTo(string $targetStatus): bool
+    {
+        $currentStatus = (string) $this->status;
+
+        return in_array($targetStatus, self::ALLOWED_TRANSITIONS[$currentStatus] ?? [], true);
+    }
+
+    public function isFinalStatus(): bool
+    {
+        return in_array((string) $this->status, self::FINAL_STATUSES, true);
     }
 
     public function project(): BelongsTo
