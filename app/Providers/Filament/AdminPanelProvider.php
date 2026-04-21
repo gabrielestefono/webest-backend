@@ -29,7 +29,7 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
-            ->path('admin')
+            ->path('dashboard')
             ->login(Login::class)
             ->registration(Register::class)
             ->passwordReset(requestAction: RequestPasswordReset::class)
