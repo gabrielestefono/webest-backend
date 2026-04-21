@@ -51,11 +51,14 @@ jobs:
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
       - name: Limpar idiomas desnecessários (manter pt_BR e en)
-        if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.deploy_mode == 'full' || inputs.deploy_mode == 'vendor-only')) || steps.changes.outputs.composer == 'true' }}
         run: |
-          find vendor -type d -name "lang" | while read dir; do
-            find "$dir" -mindepth 1 -maxdepth 1 ! -name "pt_BR" ! -name "en" -exec rm -rf {} \;
-          done
+          if [ -d vendor ]; then
+            find vendor -type d -name "lang" | while read dir; do
+              find "$dir" -mindepth 1 -maxdepth 1 ! -name "pt_BR" ! -name "en" -exec rm -rf {} \;
+            done
+          else
+            echo "Pasta vendor não encontrada, nada para limpar."
+          fi
 
       - name: Setup Node.js
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only') }}
