@@ -117,6 +117,11 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'native' => [
+            'driver' => 'custom',
+            'via' => \App\Logging\NativeLoggerFactory::class,
+        ],
+
     ],
 
 ];
