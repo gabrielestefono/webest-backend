@@ -43,7 +43,7 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.deploy_mode == 'full' || inputs.deploy_mode == 'vendor-only')) || steps.changes.outputs.composer == 'true' }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: "8.2"
           tools: composer:v2
 
       - name: Install Composer dependencies
@@ -63,8 +63,8 @@ jobs:
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only') }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Install Node dependencies
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only') }}
@@ -123,8 +123,20 @@ jobs:
             set -e
             cd "${{ secrets.FTP_SERVER_DIR }}"
 
+            echo "Aguardando app-deploy.zip..."
+
+            for i in {1..15}; do
+              if [ -f app-deploy.zip ]; then
+                echo "Arquivo encontrado!"
+                break
+              fi
+              echo "Tentativa $i - ainda não apareceu"
+              sleep 2
+            done
+
             if [ ! -f app-deploy.zip ]; then
-              echo "app-deploy.zip não encontrado em $(pwd)"
+              echo "ERRO: app-deploy.zip não encontrado"
+              pwd
               ls -la
               exit 1
             fi
@@ -156,10 +168,6 @@ jobs:
           state-name: .ftp-deploy-sync-state-vendor-zip.json
           dangerous-clean-slate: false
 
-      # =========================
-      # 🧠 SSH (CORRIGIDO)
-      # =========================
-
       - name: Descompactar vendor via SSH
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
         uses: appleboy/ssh-action@v1.2.0
@@ -172,14 +180,26 @@ jobs:
             set -e
             cd "${{ secrets.FTP_SERVER_DIR }}"
 
+            echo "Aguardando vendor-deploy.zip..."
+
+            for i in {1..15}; do
+              if [ -f vendor-deploy.zip ]; then
+                echo "Arquivo encontrado!"
+                break
+              fi
+              echo "Tentativa $i - ainda não apareceu"
+              sleep 2
+            done
+
             if [ ! -f vendor-deploy.zip ]; then
-              echo "vendor-deploy.zip não encontrado em $(pwd)"
+              echo "ERRO: vendor-deploy.zip não encontrado"
+              pwd
               ls -la
               exit 1
             fi
 
             rm -rf vendor_new
-            unzip -oq vendor-deploy.zip -d vendor_new || exit 1
+            unzip -oq vendor-deploy.zip -d vendor_new
             rm -rf vendor
             mv vendor_new vendor
             rm -f vendor-deploy.zip
