@@ -30,6 +30,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('dashboard')
+            ->darkMode(false)
             ->login(Login::class)
             ->registration(Register::class)
             ->passwordReset(requestAction: RequestPasswordReset::class)
