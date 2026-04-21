@@ -19,3 +19,13 @@ test('https requests are not redirected when force https is enabled', function (
 
     $response->assertOk();
 });
+
+test('proxied https requests are not redirected when force https is enabled', function () {
+    config()->set('app.force_https', true);
+
+    $response = get('http://localhost/', [
+        'X-Forwarded-Proto' => 'https',
+    ]);
+
+    $response->assertOk();
+});
