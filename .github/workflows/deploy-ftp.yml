@@ -51,6 +51,7 @@ jobs:
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
       - name: Limpar idiomas desnecessários (manter pt_BR e en)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_mode != 'vendor-only' }}
         run: |
           if [ -d vendor ]; then
             find vendor -type d -name "lang" | while read dir; do
@@ -126,7 +127,13 @@ jobs:
             **/storage/framework/views/**
             **/storage/debugbar/**
 
-      - name: Upload manual somente vendor
+      - name: Gerar ZIP da vendor (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
+        run: |
+          mkdir -p deploy-artifacts
+          zip -rq deploy-artifacts/vendor-deploy.zip vendor
+
+      - name: Upload ZIP da vendor via FTP
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -134,7 +141,21 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
-          local-dir: vendor/
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}vendor/
-          state-name: .ftp-deploy-sync-state-vendor.json
+          local-dir: deploy-artifacts/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          state-name: .ftp-deploy-sync-state-vendor-zip.json
           dangerous-clean-slate: false
+
+      - name: Descompactar vendor via SSH
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd "${{ secrets.FTP_SERVER_DIR }}"
+            rm -rf vendor
+            unzip -oq vendor-deploy.zip
+            rm -f vendor-deploy.zip
