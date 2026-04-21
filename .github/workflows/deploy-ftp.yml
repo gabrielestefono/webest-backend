@@ -120,7 +120,15 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
+            set -e
             cd "${{ secrets.FTP_SERVER_DIR }}"
+
+            if [ ! -f app-deploy.zip ]; then
+              echo "app-deploy.zip não encontrado em $(pwd)"
+              ls -la
+              exit 1
+            fi
+
             unzip -oq app-deploy.zip -d .
             rm -f app-deploy.zip
 
@@ -161,23 +169,17 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            echo "=== DEBUG ==="
-            pwd
-            ls -la
+            set -e
+            cd "${{ secrets.FTP_SERVER_DIR }}"
 
-            echo "=== Procurando ZIP ==="
-            find . -name "vendor-deploy.zip"
+            if [ ! -f vendor-deploy.zip ]; then
+              echo "vendor-deploy.zip não encontrado em $(pwd)"
+              ls -la
+              exit 1
+            fi
 
-            echo "=== Indo pro HOME ==="
-            cd ~
-
-            echo "=== Conteúdo HOME ==="
-            ls -la
-
-            echo "=== Deploy seguro ==="
+            rm -rf vendor_new
             unzip -oq vendor-deploy.zip -d vendor_new || exit 1
             rm -rf vendor
             mv vendor_new vendor
             rm -f vendor-deploy.zip
-
-            echo "=== Finalizado ==="
