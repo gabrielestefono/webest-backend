@@ -137,7 +137,8 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
         run: |
           mkdir -p deploy-artifacts
-          zip -rq deploy-artifacts/vendor-deploy.zip vendor
+          cd vendor
+          zip -rq ../deploy-artifacts/vendor-deploy.zip .
 
       - name: Upload ZIP da vendor via FTP
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
