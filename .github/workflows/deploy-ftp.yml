@@ -75,59 +75,54 @@ jobs:
         run: npm run build
 
       # =========================
-      # 🚀 DEPLOY FTP NORMAL
+      # 🚀 DEPLOY NORMAL (ZIP)
       # =========================
 
-      - name: Upload rápido (sem vendor)
+      - name: Gerar ZIP rápido (sem vendor)
         if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'full') || steps.changes.outputs.composer == 'true' || (github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only')) }}
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          state-name: .ftp-deploy-sync-state.json
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git/**
-            **/.github/**
-            **/node_modules/**
-            **/vendor/**
-            **/.env
-            **/.env.*
-            **/.DS_Store
-            **/tests/**
-            **/storage/logs/**
-            **/storage/framework/cache/**
-            **/storage/framework/sessions/**
-            **/storage/framework/views/**
-            **/storage/debugbar/**
+        run: |
+          rm -rf deploy-artifacts
+          mkdir -p deploy-artifacts
+          zip -rq deploy-artifacts/app-deploy.zip . \
+            -x ".git/*" ".github/*" "node_modules/*" "vendor/*" ".env" ".env.*" ".DS_Store" \
+            "tests/*" "storage/logs/*" "storage/framework/cache/*" "storage/framework/sessions/*" "storage/framework/views/*" "storage/debugbar/*" \
+            "deploy-artifacts/*"
 
-      - name: Upload completo (com vendor)
+      - name: Gerar ZIP completo (com vendor)
         if: ${{ (github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'full') || steps.changes.outputs.composer == 'true' }}
+        run: |
+          rm -rf deploy-artifacts
+          mkdir -p deploy-artifacts
+          zip -rq deploy-artifacts/app-deploy.zip . \
+            -x ".git/*" ".github/*" "node_modules/*" ".env" ".env.*" ".DS_Store" \
+            "tests/*" "storage/logs/*" "storage/framework/cache/*" "storage/framework/sessions/*" "storage/framework/views/*" "storage/debugbar/*" \
+            "deploy-artifacts/*"
+
+      - name: Upload ZIP do deploy normal via FTP
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_mode != 'vendor-only' }}
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
+          local-dir: deploy-artifacts/
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          state-name: .ftp-deploy-sync-state.json
+          state-name: .ftp-deploy-sync-state-app-zip.json
           dangerous-clean-slate: false
-          exclude: |
-            **/.git/**
-            **/.github/**
-            **/node_modules/**
-            **/.env
-            **/.env.*
-            **/.DS_Store
-            **/tests/**
-            **/storage/logs/**
-            **/storage/framework/cache/**
-            **/storage/framework/sessions/**
-            **/storage/framework/views/**
-            **/storage/debugbar/**
+
+      - name: Descompactar deploy normal via SSH
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_mode != 'vendor-only' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd "${{ secrets.FTP_SERVER_DIR }}"
+            unzip -oq app-deploy.zip -d .
+            rm -f app-deploy.zip
 
       # =========================
       # 📦 VENDOR ZIP
