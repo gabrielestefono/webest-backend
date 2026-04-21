@@ -50,15 +50,13 @@ jobs:
         if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.deploy_mode == 'full' || inputs.deploy_mode == 'vendor-only')) || steps.changes.outputs.composer == 'true' }}
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
-      - name: Limpar idiomas desnecessários (manter pt_BR e en)
+      - name: Limpar idiomas desnecessários
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_mode != 'vendor-only' }}
         run: |
           if [ -d vendor ]; then
             find vendor -type d -name "lang" | while read dir; do
               find "$dir" -mindepth 1 -maxdepth 1 ! -name "pt_BR" ! -name "en" -exec rm -rf {} \;
             done
-          else
-            echo "Pasta vendor não encontrada, nada para limpar."
           fi
 
       - name: Setup Node.js
@@ -75,6 +73,10 @@ jobs:
       - name: Build frontend assets
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only') }}
         run: npm run build
+
+      # =========================
+      # 🚀 DEPLOY FTP NORMAL
+      # =========================
 
       - name: Upload rápido (sem vendor)
         if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'full') || steps.changes.outputs.composer == 'true' || (github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only')) }}
@@ -127,7 +129,11 @@ jobs:
             **/storage/framework/views/**
             **/storage/debugbar/**
 
-      - name: Gerar ZIP da vendor (manual)
+      # =========================
+      # 📦 VENDOR ZIP
+      # =========================
+
+      - name: Gerar ZIP da vendor
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
         run: |
           mkdir -p deploy-artifacts
@@ -146,6 +152,10 @@ jobs:
           state-name: .ftp-deploy-sync-state-vendor-zip.json
           dangerous-clean-slate: false
 
+      # =========================
+      # 🧠 SSH (CORRIGIDO)
+      # =========================
+
       - name: Descompactar vendor via SSH
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_mode == 'vendor-only' }}
         uses: appleboy/ssh-action@v1.2.0
@@ -155,7 +165,23 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            cd "${{ secrets.FTP_SERVER_DIR }}"
+            echo "=== DEBUG ==="
+            pwd
+            ls -la
+
+            echo "=== Procurando ZIP ==="
+            find . -name "vendor-deploy.zip"
+
+            echo "=== Indo pro HOME ==="
+            cd ~
+
+            echo "=== Conteúdo HOME ==="
+            ls -la
+
+            echo "=== Deploy seguro ==="
+            unzip -oq vendor-deploy.zip -d vendor_new || exit 1
             rm -rf vendor
-            unzip -oq vendor-deploy.zip
+            mv vendor_new vendor
             rm -f vendor-deploy.zip
+
+            echo "=== Finalizado ==="
