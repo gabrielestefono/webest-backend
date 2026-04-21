@@ -121,7 +121,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -e
-            cd "${{ secrets.FTP_SERVER_DIR }}"
+            cd /home/defaultwebsite
 
             if [ ! -f app-deploy.zip ]; then
               echo "app-deploy.zip não encontrado em $(pwd)"
@@ -170,7 +170,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -e
-            cd "${{ secrets.FTP_SERVER_DIR }}"
+            cd /home/defaultwebsite
 
             if [ ! -f vendor-deploy.zip ]; then
               echo "vendor-deploy.zip não encontrado em $(pwd)"
