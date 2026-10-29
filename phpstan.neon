@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/Actions/
+        - app/Dto/
+        - app/Exceptions/
+        - app/Http/Controllers/Api/
+        - app/Http/Requests/
+        - app/Http/Resources/
+
+    level: 8
+    treatPhpDocTypesAsCertain: false
