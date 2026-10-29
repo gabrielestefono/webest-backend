@@ -3,27 +3,30 @@
 namespace App\Actions\Auth;
 
 use App\Dto\Auth\CheckTokenDto;
+use App\Exceptions\UnauthorizedException;
 use App\Models\User;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class CheckTokenAction
 {
     /**
-     * Validate the provided token and return the associated user model or null.
+     * Validate the provided token and return the associated user model.
+     *
+     * @throws UnauthorizedException
      */
-    public function handle(CheckTokenDto $dto): ?User
+    public function handle(CheckTokenDto $dto): User
     {
-        if ($dto->user) {
-            return $dto->user;
-        }
+        /** @var User|null $user */
+        $user = $dto->user;
 
-        if ($dto->token) {
-            /** @var User|null $user */
+        if (! $user && $dto->token) {
             $user = PersonalAccessToken::findToken($dto->token)?->tokenable;
-
-            return $user;
         }
 
-        return null;
+        if (! $user) {
+            throw new UnauthorizedException('Token inválido ou expirado.');
+        }
+
+        return $user;
     }
 }

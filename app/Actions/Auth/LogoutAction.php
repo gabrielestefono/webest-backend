@@ -9,19 +9,13 @@ class LogoutAction
 {
     /**
      * Revoke current user's token.
-     *
-     * @return array<string, bool>
      */
-    public function handle(LogoutDto $dto): array
+    public function handle(LogoutDto $dto): void
     {
         if ($dto->user) {
             $dto->user->currentAccessToken()?->delete();
         } elseif ($dto->token) {
             PersonalAccessToken::findToken($dto->token)?->delete();
         }
-
-        return [
-            'success' => true,
-        ];
     }
 }

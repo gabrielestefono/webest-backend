@@ -10,6 +10,11 @@ test('login requires email and password', function () {
     $response = $this->postJson('/api/auth/login', []);
 
     $response->assertStatus(422)
+        ->assertJson([
+            'success' => false,
+            'data' => null,
+            'message' => 'O campo e-mail é obrigatório.',
+        ])
         ->assertJsonValidationErrors(['email', 'password']);
 });
 
@@ -26,7 +31,9 @@ test('login fails with invalid credentials', function () {
 
     $response->assertStatus(401)
         ->assertJson([
-            'error' => 'Credenciais inválidas. Verifique seu e-mail e senha.',
+            'success' => false,
+            'data' => null,
+            'message' => 'Credenciais inválidas. Verifique seu e-mail e senha.',
         ]);
 });
 
@@ -42,10 +49,18 @@ test('login succeeds and generates sanctum token', function () {
     ]);
 
     $response->assertStatus(200)
+        ->assertJson([
+            'success' => true,
+            'message' => 'Login realizado com sucesso!',
+        ])
         ->assertJsonStructure([
-            'token',
-            'username',
-            'user' => ['id', 'email', 'name'],
+            'success',
+            'message',
+            'data' => [
+                'token',
+                'username',
+                'user' => ['id', 'email', 'name'],
+            ],
         ]);
 });
 
@@ -58,8 +73,12 @@ test('check token validates and returns user', function () {
     ]);
 
     $response->assertStatus(200)
-        ->assertJsonPath('id', $user->id)
-        ->assertJsonPath('email', $user->email);
+        ->assertJson([
+            'success' => true,
+            'message' => 'Token válido.',
+        ])
+        ->assertJsonPath('data.id', $user->id)
+        ->assertJsonPath('data.email', $user->email);
 });
 
 test('check token fails for invalid token', function () {
@@ -69,7 +88,9 @@ test('check token fails for invalid token', function () {
 
     $response->assertStatus(401)
         ->assertJson([
-            'error' => 'Token inválido ou expirado.',
+            'success' => false,
+            'data' => null,
+            'message' => 'Token inválido ou expirado.',
         ]);
 });
 
@@ -84,6 +105,8 @@ test('logout revokes the token', function () {
     $response->assertStatus(200)
         ->assertJson([
             'success' => true,
+            'message' => 'Logout realizado com sucesso!',
+            'data' => null,
         ]);
 
     expect($user->tokens()->count())->toBe(0);
