@@ -35,9 +35,11 @@ class Login extends BaseLogin
 
     protected function getRegisterFormAction(): Action
     {
+        $frontendUrl = (string) (config('app.frontend_url') ?: 'http://localhost:3000');
+
         return Action::make('register')
             ->label(__('filament-panels::auth/pages/login.actions.register.label'))
-            ->url(filament()->getRegistrationUrl())
+            ->url($frontendUrl . '/auth?mode=register')
             ->color('info');
     }
 
@@ -59,12 +61,10 @@ class Login extends BaseLogin
                 ->key('form-actions'),
         ];
 
-        if (filament()->hasRegistration()) {
-            $footer[] = Actions::make([$this->getRegisterFormAction()])
-                ->alignment($this->getFormActionsAlignment())
-                ->fullWidth(true)
-                ->key('register-action');
-        }
+        $footer[] = Actions::make([$this->getRegisterFormAction()])
+            ->alignment($this->getFormActionsAlignment())
+            ->fullWidth(true)
+            ->key('register-action');
 
         return Form::make([EmbeddedSchema::make('form')])
             ->id('form')

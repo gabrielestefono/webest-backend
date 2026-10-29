@@ -8,24 +8,24 @@ use function Pest\Laravel\get;
 
 uses(RefreshDatabase::class);
 
-test('filament login is available under dashboard path', function () {
-    $response = get('/dashboard/login');
+test('filament login is available under admin path', function () {
+    $response = get('/admin/login');
 
     $response->assertOk();
 });
 
-test('legacy admin path is not available', function () {
-    $response = get('/admin/login');
+test('legacy dashboard path redirects to admin path', function () {
+    $response = get('/dashboard/login');
 
-    $response->assertNotFound();
+    $response->assertRedirect('/admin/login');
 });
 
-test('authenticated user can access filament dashboard', function () {
+test('authenticated user can access filament admin', function () {
     $user = User::factory()->create();
 
     actingAs($user);
 
-    $response = get('/dashboard');
+    $response = get('/admin');
 
     $response->assertOk();
 });
