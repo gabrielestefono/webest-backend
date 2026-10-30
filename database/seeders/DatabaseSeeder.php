@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\Permission as AppPermission;
 use App\Enums\Role as AppRole;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -42,11 +43,60 @@ class DatabaseSeeder extends Seeder
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $user = User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $user = User::query()->firstOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'password' => bcrypt('password'),
+                'email_verified_at' => now(),
+            ]
+        );
 
         $user->syncRoles([AppRole::Client->value]);
+
+        $catalog = [
+            [
+                'name' => 'Landing Page de Alta Conversão',
+                'description' => 'Desenvolvimento completo de Landing Page responsiva, otimizada para SEO e performance.',
+                'base_price' => 1200.00,
+                'billing_type' => 'one_time',
+                'billing_interval' => null,
+            ],
+            [
+                'name' => 'Sistema Web / SaaS Sob Medida',
+                'description' => 'Aplicação full-stack com painel administrativo, autenticação segura e banco de dados.',
+                'base_price' => 4500.00,
+                'billing_type' => 'one_time',
+                'billing_interval' => null,
+            ],
+            [
+                'name' => 'Prototipagem UI/UX no Figma',
+                'description' => 'Design system, identidade de interface e telas interativas desktop e mobile no Figma.',
+                'base_price' => 850.00,
+                'billing_type' => 'one_time',
+                'billing_interval' => null,
+            ],
+            [
+                'name' => 'Hospedagem WeBest Cloud (Máquina Virtual)',
+                'description' => 'Infraestrutura dedicada em nuvem com deploy automatizado, backups e SSL gerenciado.',
+                'base_price' => 49.90,
+                'billing_type' => 'recurring',
+                'billing_interval' => 'month',
+            ],
+            [
+                'name' => 'Gestão de Domínio & DNS Seguro',
+                'description' => 'Configuração anual de domínio próprio, apontamentos DNS, proteção Cloudflare e renovação.',
+                'base_price' => 89.90,
+                'billing_type' => 'recurring',
+                'billing_interval' => 'year',
+            ],
+        ];
+
+        foreach ($catalog as $item) {
+            Product::query()->updateOrCreate(
+                ['name' => $item['name']],
+                array_merge($item, ['active' => true]),
+            );
+        }
     }
 }

@@ -10,6 +10,14 @@ class Proposal extends Model
 {
     use HasFactory;
 
+    public const STATUSES = [
+        'pending' => 'Pendente',
+        'accepted' => 'Aceita',
+        'countered' => 'Contra-proposta enviada',
+        'rejected' => 'Rejeitada',
+        'cancelled' => 'Cancelada',
+    ];
+
     /**
      * The attributes that are mass assignable.
      *
@@ -20,7 +28,9 @@ class Proposal extends Model
         'sender_id',
         'content',
         'price',
+        'estimated_days',
         'is_accepted',
+        'status',
         'superseded_at',
     ];
 
@@ -32,17 +42,26 @@ class Proposal extends Model
     protected function casts(): array
     {
         return [
+            'order_id' => 'integer',
+            'sender_id' => 'integer',
             'price' => 'decimal:2',
+            'estimated_days' => 'integer',
             'is_accepted' => 'boolean',
             'superseded_at' => 'datetime',
         ];
     }
 
+    /**
+     * @return BelongsTo<Order, $this>
+     */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id');

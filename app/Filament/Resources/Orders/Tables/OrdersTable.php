@@ -28,40 +28,47 @@ class OrdersTable
                 }
 
                 if ($user->can(Permission::ManageOrders->value)) {
-                    return $query;
+                    return $query->with(['products', 'product', 'user'])->latest('updated_at');
                 }
 
                 return $query
+                    ->with(['products', 'product', 'user'])
                     ->where('user_id', $user->id)
                     ->whereIn('status', Order::activeStatuses());
             })
             ->columns([
                 TextColumn::make('id')
+                    ->label('Código')
+                    ->formatStateUsing(fn (int $state): string => sprintf('#ORD-%04d', $state))
                     ->sortable(),
                 TextColumn::make('user.name')
                     ->label('Cliente')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('product.name')
-                    ->label('Produto')
-                    ->searchable()
-                    ->sortable(),
+                TextColumn::make('products.name')
+                    ->label('Produtos')
+                    ->badge()
+                    ->placeholder(fn (Order $record): string => $record->product?->name ?? '-'),
                 TextColumn::make('title')
                     ->label('Título')
                     ->searchable()
-                    ->limit(40)
+                    ->limit(36)
                     ->wrap(),
+                TextColumn::make('final_price')
+                    ->label('Valor Acordado')
+                    ->money('BRL')
+                    ->placeholder('Em definição')
+                    ->sortable(),
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => Order::statusOptions()[$state] ?? $state)
                     ->color(fn (string $state): string => Order::statusColor($state))
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->label('Criado em')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->label('Atualizado em')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -69,7 +76,8 @@ class OrdersTable
                     ->options(Order::statusOptions()),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->label('Operar Pedido'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
