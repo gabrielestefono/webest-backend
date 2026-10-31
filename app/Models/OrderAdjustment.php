@@ -13,10 +13,7 @@ class OrderAdjustment extends Model
     public const DECISIONS = [
         'pending' => 'Sob Triagem Contratual',
         'approved_in_scope' => 'Aprovado no Escopo (Sem Custo)',
-        'addendum_issued' => 'Termo Aditivo Emitido',
-        'addendum_countered' => 'Contra-proposta de Aditivo Enviada',
-        'addendum_accepted' => 'Termo Aditivo Aceito e Pago',
-        'addendum_rejected' => 'Aditivo Recusado (Mantido Escopo Original)',
+        'redirected_to_new_order' => 'Direcionado para Novo Pedido',
         'rejected' => 'Reprovado (Fora do Contrato)',
     ];
 
@@ -26,6 +23,7 @@ class OrderAdjustment extends Model
     protected $fillable = [
         'order_id',
         'requester_id',
+        'spawned_order_id',
         'client_description',
         'decision',
         'provider_notes',
@@ -52,6 +50,7 @@ class OrderAdjustment extends Model
         return [
             'order_id' => 'integer',
             'requester_id' => 'integer',
+            'spawned_order_id' => 'integer',
             'estimated_hours' => 'integer',
             'hourly_rate' => 'decimal:2',
             'addendum_price' => 'decimal:2',
@@ -80,5 +79,13 @@ class OrderAdjustment extends Model
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requester_id');
+    }
+
+    /**
+     * @return BelongsTo<Order, $this>
+     */
+    public function spawnedOrder(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'spawned_order_id');
     }
 }

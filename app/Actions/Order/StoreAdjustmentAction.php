@@ -53,11 +53,11 @@ class StoreAdjustmentAction
         }
 
         $hasOpenAdjustment = $order->adjustments()
-            ->whereIn('decision', ['pending', 'addendum_issued', 'addendum_countered'])
+            ->where('decision', 'pending')
             ->exists();
 
         if ($hasOpenAdjustment) {
-            throw new BadRequestException('Já existe uma solicitação de ajuste em triagem ou com Termo Aditivo pendente neste pedido.');
+            throw new BadRequestException('Já existe uma solicitação de ajuste em triagem contratual neste pedido.');
         }
 
         DB::transaction(function () use ($dto, $order, $user): void {

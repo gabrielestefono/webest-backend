@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Exceptions\InternalServerErrorException;
 use App\Models\Order;
-use App\Models\OrderAdjustment;
 use App\Models\Product;
 use Illuminate\Support\Facades\Http;
 
@@ -60,56 +59,6 @@ class StripeCheckoutService
                             ? ['interval' => $recurringProduct->billing_interval === 'year' ? 'year' : 'month']
                             : null,
                     ]),
-                ],
-            ],
-        ];
-
-        return $this->dispatchSessionRequest($secret, $payload);
-    }
-
-    /**
-     * Create a Stripe Checkout session for an out-of-scope Termo Aditivo.
-     *
-     * @return array{url: string, session_id: string}
-     */
-    public function createAddendumCheckout(Order $order, OrderAdjustment $adjustment, float $amount): array
-    {
-        $secret = $this->stripeSecret();
-        $frontendUrl = $this->frontendUrl();
-        $successUrl = "{$frontendUrl}/dashboard/pedidos/{$order->id}?addendum_payment=success";
-        $cancelUrl = "{$frontendUrl}/dashboard/pedidos/{$order->id}?addendum_payment=cancelled";
-
-        if ($secret === null) {
-            return [
-                'url' => "{$frontendUrl}/dashboard/pedidos/{$order->id}?stripe_unconfigured=1&adjustment={$adjustment->id}",
-                'session_id' => 'cs_local_add_'.$adjustment->id.'_'.uniqid(),
-            ];
-        }
-
-        $unitAmount = (int) round($amount * 100);
-        $reference = $adjustment->contract_reference ?? "Termo Aditivo #{$adjustment->id}";
-
-        /** @var array<string, mixed> $payload */
-        $payload = [
-            'mode' => 'payment',
-            'success_url' => $successUrl,
-            'cancel_url' => $cancelUrl,
-            'client_reference_id' => "addendum_{$adjustment->id}",
-            'metadata' => [
-                'order_id' => (string) $order->id,
-                'adjustment_id' => (string) $adjustment->id,
-                'payment_purpose' => 'order_addendum',
-            ],
-            'line_items' => [
-                [
-                    'quantity' => 1,
-                    'price_data' => [
-                        'currency' => 'brl',
-                        'unit_amount' => $unitAmount,
-                        'product_data' => [
-                            'name' => "{$reference} - {$order->title}",
-                        ],
-                    ],
                 ],
             ],
         ];

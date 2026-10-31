@@ -6,6 +6,7 @@ use App\Enums\Permission;
 use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\NegotiationPage;
+use App\Filament\Resources\Orders\Pages\OrderScopePage;
 use App\Filament\Resources\Orders\Pages\OrdersKanban;
 use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Filament\Resources\Orders\Tables\OrdersTable;
@@ -126,6 +127,7 @@ class OrderResource extends Resource
             'kanban' => OrdersKanban::route('/kanban'),
             'create' => CreateOrder::route('/create'),
             'edit' => NegotiationPage::route('/{record}'),
+            'scope' => OrderScopePage::route('/{record}/scope'),
         ];
     }
 

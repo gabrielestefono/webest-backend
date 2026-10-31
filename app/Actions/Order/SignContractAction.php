@@ -45,6 +45,10 @@ class SignContractAction
             throw new BadRequestException('Este pedido não está aguardando assinatura contratual no momento.');
         }
 
+        if (! $order->hasCompleteScope()) {
+            throw new BadRequestException('O Escopo do Serviço precisa estar cadastrado antes da assinatura digital.');
+        }
+
         $amount = (float) ($order->final_price ?? 0);
         if ($amount <= 0) {
             $agreed = $order->proposals()->where('is_accepted', true)->latest('id')->first();
@@ -58,13 +62,19 @@ class SignContractAction
         $checkout = $this->stripeService->createOrderCheckout($order, $amount);
 
         DB::transaction(function () use ($order, $user, $amount, $checkout): void {
+            $signedAt = now();
+
             $order->update([
                 'final_price' => $amount,
-                'contract_signed_at' => now(),
+                'contract_signed_at' => $signedAt,
                 'stripe_checkout_url' => $checkout['url'],
                 'stripe_session_id' => $checkout['session_id'],
                 'status' => 'awaiting_payment',
             ]);
+
+            $order->scope()
+                ->whereNull('locked_at')
+                ->update(['locked_at' => $signedAt]);
 
             Project::query()->updateOrCreate(
                 ['order_id' => $order->id],

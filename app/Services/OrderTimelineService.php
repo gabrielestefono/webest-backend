@@ -5,9 +5,14 @@ namespace App\Services;
 use App\Exceptions\BadRequestException;
 use App\Exceptions\ForbiddenException;
 use App\Models\Order;
+use App\Models\OrderAdjustment;
+use App\Models\OrderAttachment;
 use App\Models\OrderEvent;
 use App\Models\OrderMessage;
 use App\Models\OrderMessageVersion;
+use App\Models\OrderScope;
+use App\Models\Product;
+use App\Models\Proposal;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -215,6 +220,8 @@ class OrderTimelineService
     {
         $order->load([
             'user',
+            'parentOrder',
+            'scope',
             'product',
             'products',
             'attachments',
@@ -222,6 +229,7 @@ class OrderTimelineService
             'messages.sender',
             'messages.versions.editedBy',
             'adjustments.requester',
+            'adjustments.spawnedOrder',
             'events.actor',
             'project',
         ]);
@@ -310,9 +318,17 @@ class OrderTimelineService
             ];
         }
 
+        $scopeModel = $order->scope;
+        $hasCompleteScope = $scopeModel instanceof OrderScope && $scopeModel->isComplete();
+
         return [
             'id' => $order->id,
             'code' => sprintf('#ORD-%04d', $order->id),
+            'parent_order' => $order->parentOrder instanceof Order ? [
+                'id' => $order->parentOrder->id,
+                'code' => sprintf('#ORD-%04d', $order->parentOrder->id),
+                'title' => $order->parentOrder->title,
+            ] : null,
             'title' => $order->title,
             'description' => $order->description,
             'figma_url' => $order->figma_url,
@@ -321,6 +337,16 @@ class OrderTimelineService
             'status_color' => Order::statusColor($order->status),
             'final_price' => $order->final_price !== null ? (float) $order->final_price : null,
             'estimated_days' => $order->estimated_days,
+            'has_scope' => $hasCompleteScope,
+            'scope' => $hasCompleteScope && $scopeModel instanceof OrderScope ? [
+                'included_items' => $scopeModel->normalizedIncludedItems(),
+                'excluded_items' => $scopeModel->normalizedExcludedItems(),
+                'delivery_criteria' => $scopeModel->normalizedDeliveryCriteria(),
+                'revision_rules' => $scopeModel->normalizedRevisionRules(),
+                'client_responsibilities' => $scopeModel->normalizedClientResponsibilities(),
+                'locked_at' => $scopeModel->locked_at?->toIso8601String(),
+                'updated_at' => $scopeModel->updated_at?->toIso8601String(),
+            ] : null,
             'contract_url' => $order->contract_url,
             'contract_signed_at' => $order->contract_signed_at?->toIso8601String(),
             'stripe_checkout_url' => $order->stripe_checkout_url ?? $order->project?->payment_link,
@@ -332,7 +358,7 @@ class OrderTimelineService
             'warranty_until' => $order->warranty_until?->toIso8601String(),
             'created_at' => $order->created_at?->toIso8601String(),
             'updated_at' => $order->updated_at?->toIso8601String(),
-            'products' => $products->map(static fn ($product): array => [
+            'products' => $products->map(static fn (Product $product): array => [
                 'id' => $product->id,
                 'name' => $product->name,
                 'description' => $product->description,
@@ -341,14 +367,14 @@ class OrderTimelineService
                 'billing_interval' => $product->billing_interval,
                 'billing_label' => $product->billingLabel(),
             ])->values()->all(),
-            'attachments' => $order->attachments->map(static fn ($att): array => [
+            'attachments' => $order->attachments->map(static fn (OrderAttachment $att): array => [
                 'id' => $att->id,
                 'original_name' => $att->original_name,
                 'mime_type' => $att->mime_type,
                 'file_size' => $att->file_size,
                 'created_at' => $att->created_at?->toIso8601String(),
             ])->values()->all(),
-            'proposals' => $order->proposals->sortBy('id')->map(static fn ($prop): array => [
+            'proposals' => $order->proposals->sortBy('id')->map(static fn (Proposal $prop): array => [
                 'id' => $prop->id,
                 'sender_id' => $prop->sender_id,
                 'sender_name' => $prop->sender?->name ?? 'Usuário',
@@ -361,23 +387,14 @@ class OrderTimelineService
                 'created_at' => $prop->created_at?->toIso8601String(),
             ])->values()->all(),
             'active_proposal_for_client' => $activeProposalForClient,
-            'adjustments' => $order->adjustments->sortBy('id')->map(static fn ($adj): array => [
+            'adjustments' => $order->adjustments->sortBy('id')->map(static fn (OrderAdjustment $adj): array => [
                 'id' => $adj->id,
                 'client_description' => $adj->client_description,
                 'decision' => $adj->decision,
                 'decision_label' => $adj->decisionLabel(),
                 'provider_notes' => $adj->provider_notes,
-                'billing_mode' => $adj->billing_mode,
-                'estimated_hours' => $adj->estimated_hours,
-                'hourly_rate' => $adj->hourly_rate !== null ? (float) $adj->hourly_rate : null,
-                'addendum_scope' => $adj->addendum_scope,
-                'addendum_price' => $adj->addendum_price !== null ? (float) $adj->addendum_price : null,
-                'counter_price' => $adj->counter_price !== null ? (float) $adj->counter_price : null,
-                'counter_notes' => $adj->counter_notes,
-                'addendum_extra_days' => $adj->addendum_extra_days,
-                'contract_reference' => $adj->contract_reference,
-                'stripe_payment_link' => $adj->stripe_payment_link,
-                'payment_status' => $adj->payment_status,
+                'spawned_order_id' => $adj->spawned_order_id,
+                'spawned_order_code' => $adj->spawned_order_id !== null ? sprintf('#ORD-%04d', $adj->spawned_order_id) : null,
                 'resolved_at' => $adj->resolved_at?->toIso8601String(),
                 'created_at' => $adj->created_at?->toIso8601String(),
             ])->values()->all(),

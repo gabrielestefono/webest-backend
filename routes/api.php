@@ -17,12 +17,12 @@ Route::prefix('orders')->middleware('auth:sanctum')->group(function (): void {
     Route::post('/', [OrderController::class, 'store']);
     Route::get('/{order}', [OrderController::class, 'show']);
     Route::get('/{order}/attachments/{attachment}/download', [OrderController::class, 'downloadAttachment']);
+    Route::get('/{order}/contract/pdf', [OrderController::class, 'downloadContractPdf']);
     Route::post('/{order}/messages', [OrderController::class, 'sendMessage']);
     Route::put('/{order}/messages/{message}', [OrderController::class, 'updateMessage']);
     Route::post('/{order}/proposals/respond', [OrderController::class, 'respondProposal']);
     Route::post('/{order}/contract/sign', [OrderController::class, 'signContract']);
     Route::post('/{order}/adjustments', [OrderController::class, 'storeAdjustment']);
-    Route::post('/{order}/adjustments/{adjustment}/respond', [OrderController::class, 'respondAddendum']);
     Route::post('/{order}/complete', [OrderController::class, 'completeOrder']);
 });
 

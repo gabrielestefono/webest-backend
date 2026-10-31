@@ -6,7 +6,11 @@
             : ($record->product ? collect([$record->product]) : collect());
         $editableProviderMsg = $this->editableProviderMessage();
         $timeline = $this->roomTimeline();
-        $adjustments = $record->adjustments()->latest('id')->get();
+        $adjustments = $record->adjustments()->with('spawnedOrder')->latest('id')->get();
+        $hasCompleteScope = $record->hasCompleteScope();
+        $scopePageUrl = \App\Filament\Resources\Orders\OrderResource::getUrl('scope', ['record' => $record]);
+        $pdfDownloadUrl = route('filament.orders.contract.pdf', ['order' => $record->id]);
+        $catalogProducts = $this->availableCatalogProducts();
     @endphp
 
     <div style="display: flex; flex-direction: column; gap: 20px; color: #f8fafc;">
@@ -20,8 +24,36 @@
                     <h2 style="margin: 4px 0 0 0; font-size: 20px; font-weight: 700; color: #ffffff;">
                         #ORD-{{ str_pad((string) $record->id, 4, '0', STR_PAD_LEFT) }} — {{ $record->title }}
                     </h2>
+                    @if($record->parentOrder)
+                        <div style="margin-top: 6px; font-size: 12px; color: #c084fc;">
+                            ↳ Originado de item fora do escopo do pedido
+                            <a
+                                href="{{ \App\Filament\Resources\Orders\OrderResource::getUrl('edit', ['record' => $record->parentOrder->id]) }}"
+                                style="color: #f0abfc; font-weight: 700; text-decoration: underline;"
+                            >
+                                #ORD-{{ str_pad((string) $record->parentOrder->id, 4, '0', STR_PAD_LEFT) }} ({{ $record->parentOrder->title }})
+                            </a>
+                        </div>
+                    @endif
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                    <a
+                        href="{{ $scopePageUrl }}"
+                        style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 9999px; background: {{ $hasCompleteScope ? '#14532d' : '#78350f' }}; border: 1px solid {{ $hasCompleteScope ? '#22c55e' : '#f59e0b' }}; color: {{ $hasCompleteScope ? '#dcfce7' : '#fef3c7' }}; font-size: 12px; font-weight: 700; text-decoration: none;"
+                    >
+                        📋 {{ $hasCompleteScope ? 'Escopo Definido (Ver / Editar)' : 'Escopo Obrigatório Pendente' }}
+                    </a>
+
+                    @if($hasCompleteScope)
+                        <a
+                            href="{{ $pdfDownloadUrl }}"
+                            target="_blank"
+                            style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 9999px; background: #2e1065; border: 1px solid #9333ea; color: #f3e8ff; font-size: 12px; font-weight: 700; text-decoration: none;"
+                        >
+                            ⬇ PDF Consolidado
+                        </a>
+                    @endif
+
                     <span style="padding: 6px 14px; border-radius: 9999px; background: #581c87; border: 1px solid #9333ea; color: #f3e8ff; font-size: 13px; font-weight: 700;">
                         Status: {{ \App\Models\Order::statusOptions()[$record->status] ?? $record->status }}
                     </span>
@@ -187,11 +219,11 @@
             </div>
         </div>
 
-        {{-- 3. TRIAGEM CONTRATUAL DE AJUSTES & TERMO ADITIVO --}}
+        {{-- 3. TRIAGEM CONTRATUAL DE AJUSTES --}}
         @if($adjustments->isNotEmpty())
             <div style="border: 1px solid #f59e0b; border-radius: 12px; background: #0f172a; padding: 20px;">
                 <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #fcd34d;">
-                    🛡️ Triagem Contratual de Ajustes & Termos Aditivos ({{ $adjustments->count() }})
+                    🛡️ Triagem Contratual de Ajustes ({{ $adjustments->count() }})
                 </h3>
 
                 <div style="display: flex; flex-direction: column; gap: 14px;">
@@ -208,15 +240,29 @@
 
                             <div style="font-size: 14px; color: #e2e8f0; white-space: pre-wrap; margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px;">{{ $adj->client_description }}</div>
 
-                            @if($adj->contract_reference)
-                                <div style="margin-bottom: 10px; padding: 10px; border-radius: 8px; background: #2e1065; border: 1px solid #7e22ce; font-size: 13px; color: #f3e8ff;">
-                                    <div><strong>{{ $adj->contract_reference }}</strong> — Valor: <strong>R$ {{ number_format((float) $adj->addendum_price, 2, ',', '.') }}</strong> (+{{ $adj->addendum_extra_days }} dias úteis) · Pagamento: <strong>{{ $adj->payment_status }}</strong></div>
-                                    <div style="margin-top: 4px; color: #ddd6fe;">Escopo Extra: {{ $adj->addendum_scope }}</div>
-                                    @if($adj->decision === 'addendum_countered' && $adj->counter_price)
-                                        <div style="margin-top: 8px; padding: 8px; border-radius: 6px; background: #451a03; color: #fde68a;">
-                                            ⚡ <strong>Contra-proposta do Cliente no Aditivo:</strong> R$ {{ number_format((float) $adj->counter_price, 2, ',', '.') }} — "{{ $adj->counter_notes }}"
+                            @if($adj->spawned_order_id)
+                                <div style="margin-bottom: 10px; padding: 12px; border-radius: 8px; background: #2e1065; border: 1px solid #7e22ce; font-size: 13px; color: #f3e8ff;">
+                                    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;">
+                                        <div>
+                                            <strong>↪ Direcionado para Novo Pedido #ORD-{{ str_pad((string) $adj->spawned_order_id, 4, '0', STR_PAD_LEFT) }}</strong>
+                                            @if($adj->spawnedOrder)
+                                                — {{ $adj->spawnedOrder->title }}
+                                            @endif
                                         </div>
+                                        <a
+                                            href="{{ \App\Filament\Resources\Orders\OrderResource::getUrl('edit', ['record' => $adj->spawned_order_id]) }}"
+                                            style="color: #f0abfc; font-weight: 700; text-decoration: underline;"
+                                        >
+                                            Abrir Novo Pedido no Painel →
+                                        </a>
+                                    </div>
+                                    @if($adj->provider_notes)
+                                        <div style="margin-top: 6px; color: #ddd6fe;">Orientação enviada ao cliente: "{{ $adj->provider_notes }}"</div>
                                     @endif
+                                </div>
+                            @elseif($adj->decision === 'rejected' && $adj->provider_notes)
+                                <div style="margin-bottom: 10px; padding: 10px; border-radius: 8px; background: #450a0a; border: 1px solid #991b1b; font-size: 13px; color: #fecaca;">
+                                    <strong>Motivo da reprovação:</strong> {{ $adj->provider_notes }}
                                 </div>
                             @endif
 
@@ -233,10 +279,10 @@
 
                                         <button
                                             type="button"
-                                            wire:click="openAddendumModal({{ $adj->id }})"
+                                            wire:click="openSpawnOrderModal({{ $adj->id }})"
                                             style="border: none; border-radius: 8px; background: #9333ea; color: #ffffff; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;"
                                         >
-                                            📄 Fora do Escopo: Emitir Termo Aditivo (Stripe)
+                                            ➕ Fora do Escopo: Criar Novo Pedido
                                         </button>
                                     </div>
 
@@ -244,7 +290,7 @@
                                         <input
                                             type="text"
                                             wire:model="rejectionReasons.{{ $adj->id }}"
-                                            placeholder="Motivo contratual para reprovar ajuste..."
+                                            placeholder="Motivo contratual para apenas reprovar o ajuste..."
                                             style="flex: 1; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: #ffffff; padding: 7px 10px; font-size: 12px;"
                                         />
                                         <button
@@ -256,31 +302,6 @@
                                         </button>
                                     </div>
                                 </div>
-                            @elseif($adj->decision === 'addendum_countered')
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                    <button
-                                        type="button"
-                                        wire:click="requestConfirmation('accept_addendum_counter', 'Aceitar Contra-proposta do Aditivo?', 'O valor do Termo Aditivo será atualizado para o valor proposto pelo cliente e um novo link Stripe será liberado.', {{ $adj->id }})"
-                                        style="border: none; border-radius: 8px; background: #16a34a; color: #ffffff; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;"
-                                    >
-                                        ✓ Aceitar Contra-proposta (R$ {{ number_format((float) $adj->counter_price, 2, ',', '.') }})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        wire:click="openAddendumModal({{ $adj->id }})"
-                                        style="border: none; border-radius: 8px; background: #7c3aed; color: #ffffff; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;"
-                                    >
-                                        ↺ Enviar Nova Oferta no Aditivo
-                                    </button>
-                                </div>
-                            @elseif($adj->decision === 'addendum_issued' && $adj->payment_status !== 'paid')
-                                <button
-                                    type="button"
-                                    wire:click="requestConfirmation('confirm_addendum_paid_manual', 'Confirmar Pagamento do Termo Aditivo?', 'Confirma a quitação do aditivo? Os dias úteis extras serão somados automaticamente ao prazo e o projeto irá para Em Revisão.', {{ $adj->id }})"
-                                    style="border: none; border-radius: 8px; background: #0284c7; color: #ffffff; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;"
-                                >
-                                    💳 Confirmar Pagamento do Aditivo Manualmente
-                                </button>
                             @endif
                         </div>
                     @endforeach
@@ -291,8 +312,54 @@
         {{-- 4. NEGOCIAÇÃO COMERCIAL EM PING-PONG --}}
         <div style="border: 1px solid #334155; border-radius: 12px; background: #0f172a; padding: 20px;">
             <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #ffffff;">
-                🤝 Negociação Comercial (Ping-Pong de Propostas)
+                🤝 Negociação Comercial & Escopo do Serviço
             </h3>
+
+            {{-- BARRA OBRIGATÓRIA DE ESCOPO DO SERVIÇO --}}
+            @if(! $hasCompleteScope)
+                <div style="margin-bottom: 16px; padding: 16px; border-radius: 10px; background: #2e1065; border: 1px solid #a855f7; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div style="max-width: 680px;">
+                        <div style="font-size: 14px; font-weight: 700; color: #f3e8ff; margin-bottom: 4px;">
+                            ⚠️ Etapa Obrigatória: Cadastre o Escopo do Serviço antes de enviar ou aceitar propostas
+                        </div>
+                        <div style="font-size: 12px; color: #ddd6fe;">
+                            Preencha estruturadamente o que será feito, o que NÃO será feito, critérios de entrega, revisões e responsabilidades do cliente. O sistema gerará automaticamente o PDF consolidado do pedido.
+                        </div>
+                    </div>
+                    <a
+                        href="{{ $scopePageUrl }}"
+                        style="display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; background: #9333ea; color: #ffffff; padding: 10px 16px; font-size: 13px; font-weight: 700; text-decoration: none;"
+                    >
+                        📋 Cadastrar Escopo do Serviço →
+                    </a>
+                </div>
+            @else
+                <div style="margin-bottom: 16px; padding: 12px 16px; border-radius: 10px; background: #052e16; border: 1px solid #16a34a; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div style="font-size: 13px; color: #dcfce7;">
+                        ✓ <strong>Escopo do Serviço estruturado!</strong>
+                        @if($record->contract_signed_at)
+                            <span>Assinado e congelado em {{ $record->contract_signed_at->format('d/m/Y H:i') }}.</span>
+                        @else
+                            <span>Pronto para envio de proposta e geração do PDF consolidado.</span>
+                        @endif
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <a
+                            href="{{ $scopePageUrl }}"
+                            style="padding: 6px 12px; border-radius: 8px; background: #14532d; border: 1px solid #22c55e; color: #ffffff; font-size: 12px; font-weight: 700; text-decoration: none;"
+                        >
+                            {{ $record->contract_signed_at ? 'Ver Escopo Congelado' : 'Editar Escopo' }}
+                        </a>
+                        <a
+                            href="{{ $pdfDownloadUrl }}"
+                            target="_blank"
+                            style="padding: 6px 12px; border-radius: 8px; background: #3b0764; border: 1px solid #9333ea; color: #f3e8ff; font-size: 12px; font-weight: 700; text-decoration: none;"
+                        >
+                            ⬇ Baixar PDF Consolidado
+                        </a>
+                    </div>
+                </div>
+            @endif
 
             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
                 @forelse($record->proposals()->with('sender')->orderBy('id', 'desc')->get() as $proposal)
@@ -334,7 +401,7 @@
                                 <div style="display: flex; gap: 8px;">
                                     <button
                                         type="button"
-                                        wire:click="requestConfirmation('accept_proposal', 'Aceitar Contra-proposta do Cliente?', 'Ao confirmar, o valor de R$ {{ number_format((float) $proposal->price, 2, ',', '.') }} será fixado definitivamente como acordo comercial e o contrato será liberado para assinatura.', {{ $proposal->id }})"
+                                        wire:click="requestConfirmation('accept_proposal', 'Aceitar Contra-proposta do Cliente?', 'Ao confirmar, o valor de R$ {{ number_format((float) $proposal->price, 2, ',', '.') }} será fixado definitivamente como acordo comercial e o contrato consolidado será liberado para assinatura.', {{ $proposal->id }})"
                                         style="border: none; border-radius: 8px; background: #16a34a; color: #ffffff; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;"
                                     >
                                         ✓ Aceitar Oferta
@@ -352,7 +419,7 @@
                     </div>
                 @empty
                     <div style="padding: 14px; border-radius: 8px; background: #1e293b; color: #94a3b8; font-size: 13px; text-align: center;">
-                        Nenhuma proposta comercial enviada ainda. Formule a primeira proposta abaixo.
+                        Nenhuma proposta comercial enviada ainda.
                     </div>
                 @endforelse
             </div>
@@ -360,7 +427,7 @@
             @if($this->canSendProposal())
                 <div style="border-top: 1px solid #1e293b; padding-top: 16px;">
                     <h4 style="margin: 0 0 10px 0; font-size: 15px; font-weight: 700; color: #e9d5ff;">{{ $this->proposalActionLabel() }}</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
                         <div>
                             <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Valor Proposto (R$)</label>
                             <input
@@ -383,15 +450,6 @@
                                 style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;"
                             />
                         </div>
-                        <div>
-                            <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">URL do Contrato (Opcional)</label>
-                            <input
-                                type="text"
-                                wire:model="proposalFormData.contract_url"
-                                placeholder="Gerado automaticamente se vazio"
-                                style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;"
-                            />
-                        </div>
                     </div>
 
                     <div style="margin-bottom: 12px;">
@@ -399,14 +457,14 @@
                         <textarea
                             rows="3"
                             wire:model="proposalFormData.content"
-                            placeholder="Ex: Olá! Analisei seu Figma e farei sua Landing Page responsiva conforme solicitado."
+                            placeholder="Ex: Olá! Estruturei o Escopo do Serviço e farei sua Landing Page responsiva conforme solicitado."
                             style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;"
                         ></textarea>
                     </div>
 
                     <button
                         type="button"
-                        wire:click="requestConfirmation('send_proposal', 'Confirmar Envio da Proposta Comercial?', 'O cliente será notificado imediatamente no chat com o valor e prazo propostos. Deseja prosseguir?')"
+                        wire:click="requestConfirmation('send_proposal', 'Confirmar Envio da Proposta Comercial?', 'O cliente será notificado imediatamente no chat com o valor, prazo e acesso ao PDF do Escopo do Serviço. Deseja prosseguir?')"
                         style="border: none; border-radius: 8px; background: #7c3aed; color: #ffffff; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;"
                     >
                         {{ $this->proposalActionLabel() }}
@@ -417,14 +475,14 @@
             @endif
         </div>
 
-        {{-- 5. SALA DE CHAT POR TURNOS (WHATSAPP ROXO - VISÃO DO PRESTADOR) --}}
+        {{-- 5. SALA DE CHAT (VISÃO DO PRESTADOR) --}}
         <div style="border: 1px solid #581c87; border-radius: 12px; background: #090514; padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                 <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #e9d5ff;">
-                    💬 Linha do Tempo & Chat por Turnos (Auditável)
+                    💬 Linha do Tempo & Chat da Sala (Auditável)
                 </h3>
                 <span style="font-size: 12px; color: #a855f7;">
-                    1 mensagem por turno · Edições liberadas até resposta da outra parte
+                    Histórico registrado integralmente no PDF consolidado
                 </span>
             </div>
 
@@ -437,6 +495,16 @@
                                 <span>{{ \Illuminate\Support\Carbon::parse($item['created_at'])->format('d/m H:i') }}</span>
                             </div>
                             <div style="font-size: 13px; color: #e2e8f0;">{{ $item['message'] }}</div>
+                            @if(! empty($item['payload']['new_order_id']))
+                                <div style="margin-top: 8px;">
+                                    <a
+                                        href="{{ \App\Filament\Resources\Orders\OrderResource::getUrl('edit', ['record' => $item['payload']['new_order_id']]) }}"
+                                        style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; background: #581c87; color: #f3e8ff; font-size: 12px; font-weight: 700; text-decoration: none;"
+                                    >
+                                        ↪ Abrir {{ $item['payload']['new_order_code'] ?? ('#ORD-'.$item['payload']['new_order_id']) }} no Painel →
+                                    </a>
+                                </div>
+                            @endif
                         </div>
                     @else
                         @php
@@ -445,10 +513,10 @@
                         <div style="align-self: {{ $isProviderMsg ? 'flex-end' : 'flex-start' }}; max-width: 78%; min-width: 260px; border-radius: 12px; padding: 12px 14px; background: {{ $isProviderMsg ? '#4c1d95' : '#1e293b' }}; border: 1px solid {{ $isProviderMsg ? '#7c3aed' : '#334155' }};">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 11px;">
                                 <span style="font-weight: 700; color: {{ $isProviderMsg ? '#e9d5ff' : '#93c5fd' }};">
-                                    Turno #{{ $item['turn_number'] }} · {{ $item['sender_name'] }}
+                                    {{ $item['sender_name'] }}
                                 </span>
                                 <span style="color: #cbd5e1;">
-                                    {{ $item['is_locked'] ? '🔒 Congelada' : '✏️ Turno Aberto' }}
+                                    {{ $item['is_locked'] ? '🔒 Registrada' : '✏️ Editável pelo autor' }}
                                 </span>
                             </div>
 
@@ -476,105 +544,124 @@
             @if(!in_array($record->status, ['cancelled', 'rejected'], true))
                 <div>
                     <div style="font-size: 12px; color: #c084fc; margin-bottom: 6px; font-weight: 600;">
-                        @if($editableProviderMsg)
-                            ✏️ Você já respondeu neste turno e o cliente ainda não falou. Editar abaixo atualizará sua mensagem atual (mantendo histórico):
-                        @else
-                            💬 Enviar resposta do seu turno (ao enviar, a mensagem anterior do cliente será congelada permanentemente):
-                        @endif
+                        💬 Enviar resposta ao cliente:
                     </div>
 
                     <textarea
                         rows="3"
                         wire:model="turnMessageContent"
-                        placeholder="Digite a mensagem documentada deste turno para o cliente..."
+                        placeholder="Digite sua mensagem para o cliente..."
                         style="width: 100%; border: 1px solid #6b21a8; border-radius: 10px; background: #130b24; color: #ffffff; padding: 10px 12px; font-size: 14px; margin-bottom: 10px;"
                     ></textarea>
 
                     <button
                         type="button"
-                        wire:click="requestConfirmation('send_provider_turn', '{{ $editableProviderMsg ? 'Salvar Edição do Turno Atual?' : 'Enviar Resposta e Congelar Turno do Cliente?' }}', '{{ $editableProviderMsg ? 'A versão anterior da sua mensagem ficará arquivada no histórico auditável e o cliente verá a versão atualizada.' : 'Ao enviar sua resposta, a mensagem anterior do cliente será congelada definitivamente e um novo turno será registrado.' }}')"
+                        wire:click="sendProviderTurnMessage"
+                        wire:loading.attr="disabled"
                         style="border: none; border-radius: 8px; background: #9333ea; color: #ffffff; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;"
                     >
-                        {{ $editableProviderMsg ? '💾 Salvar Edição da Mensagem' : '📨 Enviar Mensagem do Turno' }}
+                        📨 Enviar Mensagem
                     </button>
                 </div>
             @endif
         </div>
     </div>
 
-    {{-- MODAL: EMISSÃO DE TERMO ADITIVO (STRIPE) --}}
-    @if($showAddendumModal)
-        <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 9990;" wire:click="closeAddendumModal"></div>
-        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; max-width: 540px; background: #0f172a; border: 1px solid #7e22ce; border-radius: 14px; padding: 22px; z-index: 9991; color: #f8fafc;">
+    {{-- MODAL: FORA DO ESCOPO -> CRIAR NOVO PEDIDO COM SELEÇÃO DE PRODUTOS --}}
+    @if($showSpawnOrderModal)
+        <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 9990;" wire:click="closeSpawnOrderModal"></div>
+        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; max-width: 600px; max-height: 90vh; overflow-y: auto; background: #0f172a; border: 1px solid #9333ea; border-radius: 14px; padding: 22px; z-index: 9991; color: #f8fafc;">
             <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700; color: #f3e8ff;">
-                📄 Emitir Termo Aditivo ao Contrato Principal
+                ➕ Item Fora do Escopo — Abrir Novo Pedido do Zero
             </h3>
-            <p style="margin: 0 0 14px 0; font-size: 12px; color: #94a3b8;">
-                Vinculado automaticamente ao Contrato #ORD-{{ str_pad((string) $record->id, 4, '0', STR_PAD_LEFT) }} com cobrança avulsa via Stripe.
+            <p style="margin: 0 0 16px 0; font-size: 12px; color: #94a3b8;">
+                O pedido atual (#ORD-{{ str_pad((string) $record->id, 4, '0', STR_PAD_LEFT) }}) voltará para Homologação e o Bot enviará no chat a sua explicação técnica junto ao link clicável do novo pedido.
             </p>
 
-            <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
                 <div>
-                    <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Modelo de Precificação</label>
-                    <select
-                        wire:model.live="addendumForm.billing_mode"
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">
+                        1. Selecione o(s) Produto(s) do Novo Pedido
+                    </label>
+                    <div style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border-radius: 8px; background: #090d16; border: 1px solid #334155;">
+                        @forelse($catalogProducts as $catalogProd)
+                            @php
+                                $isSelected = in_array($catalogProd->id, $spawnOrderForm['product_ids'] ?? [], true);
+                            @endphp
+                            <button
+                                type="button"
+                                wire:click="toggleSpawnProduct({{ $catalogProd->id }})"
+                                style="display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid {{ $isSelected ? '#a855f7' : '#334155' }}; background: {{ $isSelected ? '#2e1065' : '#1e293b' }}; color: #f8fafc; cursor: pointer;"
+                            >
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 700;">
+                                        {{ $isSelected ? '☑' : '☐' }} {{ $catalogProd->name }}
+                                    </div>
+                                    <div style="font-size: 11px; color: #94a3b8;">{{ $catalogProd->billingLabel() }}</div>
+                                </div>
+                                @if($catalogProd->base_price)
+                                    <span style="font-size: 12px; font-weight: 700; color: #c084fc;">
+                                        Base: R$ {{ number_format((float) $catalogProd->base_price, 2, ',', '.') }}
+                                    </span>
+                                @endif
+                            </button>
+                        @empty
+                            <div style="font-size: 12px; color: #94a3b8;">Nenhum produto ativo encontrado no catálogo.</div>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">
+                        2. Título do Novo Pedido
+                    </label>
+                    <input
+                        type="text"
+                        wire:model="spawnOrderForm.title"
+                        placeholder="Ex: Deploy e Configuração de Servidor VPS"
                         style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;"
+                    />
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 4px;">
+                        3. Explicação Técnica ao Cliente (será enviada pelo Bot no chat)
+                    </label>
+                    <textarea
+                        rows="3"
+                        wire:model="spawnOrderForm.provider_notes"
+                        placeholder="Ex: O escopo aprovado contemplava o desenvolvimento da Landing Page, mas não o serviço de Deploy em servidor. Criamos este novo pedido de Deploy para seguirmos com escopo e orçamento dedicados."
+                        style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;"
+                    ></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px;">
+                    <button
+                        type="button"
+                        wire:click="closeSpawnOrderModal"
+                        style="border: 1px solid #475569; border-radius: 8px; background: transparent; color: #cbd5e1; padding: 8px 14px; font-size: 13px; cursor: pointer;"
                     >
-                        <option value="fixed">Preço Fechado (Escopo Fixo)</option>
-                        <option value="hourly">Estimativa por Horas (Horas × Valor/Hora)</option>
-                    </select>
-                </div>
-
-                @if(($addendumForm['billing_mode'] ?? 'fixed') === 'hourly')
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div>
-                            <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Horas Estimadas</label>
-                            <input type="number" min="1" wire:model.live="addendumForm.estimated_hours" style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;" />
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Valor / Hora (R$)</label>
-                            <input type="number" step="0.01" min="1" wire:model.live="addendumForm.hourly_rate" style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;" />
-                        </div>
-                    </div>
-                @else
-                    <div>
-                        <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Valor do Aditivo (R$)</label>
-                        <input type="number" step="0.01" min="1" wire:model="addendumForm.addendum_price" placeholder="350.00" style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;" />
-                    </div>
-                @endif
-
-                <div>
-                    <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Dias Úteis Adicionais ao Cronograma</label>
-                    <input type="number" min="0" max="180" wire:model="addendumForm.addendum_extra_days" style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;" />
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px;">Descrição Detalhada do Escopo Adicional</label>
-                    <textarea rows="3" wire:model="addendumForm.addendum_scope" placeholder="Descreva exatamente o que será entregue neste aditivo..." style="width: 100%; border: 1px solid #475569; border-radius: 8px; background: #1e293b; color: #ffffff; padding: 8px 10px; font-size: 13px;"></textarea>
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
-                    <button type="button" wire:click="closeAddendumModal" style="border: 1px solid #475569; border-radius: 8px; background: transparent; color: #cbd5e1; padding: 8px 14px; font-size: 13px; cursor: pointer;">
                         Cancelar
                     </button>
                     <button
                         type="button"
-                        wire:click="requestConfirmation('issue_addendum', 'Confirmar Emissão do Termo Aditivo?', 'O Termo Aditivo será gerado com checkout Stripe e publicado na sala do cliente. Confirma os valores e prazos informados?')"
-                        style="border: none; border-radius: 8px; background: #9333ea; color: #ffffff; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer;"
+                        wire:click="createNewOrderFromAdjustment"
+                        wire:loading.attr="disabled"
+                        style="border: none; border-radius: 8px; background: #9333ea; color: #ffffff; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;"
                     >
-                        Emitir Termo Aditivo
+                        ➕ Criar Novo Pedido & Notificar Cliente
                     </button>
                 </div>
             </div>
         </div>
     @endif
 
-    {{-- MODAL: HISTÓRICO DE EDIÇÕES DO TURNO --}}
+    {{-- MODAL: HISTÓRICO DE EDIÇÕES --}}
     @if($historyModalMessage)
         <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 9992;" wire:click="closeMessageHistory"></div>
         <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; max-width: 520px; background: #0f172a; border: 1px solid #6b21a8; border-radius: 14px; padding: 20px; z-index: 9993; color: #f8fafc;">
             <h3 style="margin: 0 0 12px 0; font-size: 17px; font-weight: 700; color: #e9d5ff;">
-                🕓 Histórico de Edições — Turno #{{ $historyModalMessage['turn_number'] }} ({{ $historyModalMessage['sender_name'] }})
+                🕓 Histórico de Edições ({{ $historyModalMessage['sender_name'] }})
             </h3>
 
             <div style="display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto;">

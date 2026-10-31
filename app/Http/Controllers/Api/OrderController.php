@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Order\CompleteOrderAction;
 use App\Actions\Order\DownloadOrderAttachmentAction;
+use App\Actions\Order\DownloadOrderContractPdfAction;
 use App\Actions\Order\ListOrdersAction;
-use App\Actions\Order\RespondAddendumAction;
 use App\Actions\Order\RespondProposalAction;
 use App\Actions\Order\SendTurnMessageAction;
 use App\Actions\Order\ShowOrderAction;
@@ -16,8 +16,8 @@ use App\Actions\Order\UpdateTurnMessageAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\CompleteOrderRequest;
 use App\Http\Requests\Order\DownloadOrderAttachmentRequest;
+use App\Http\Requests\Order\DownloadOrderContractPdfRequest;
 use App\Http\Requests\Order\ListOrdersRequest;
-use App\Http\Requests\Order\RespondAddendumRequest;
 use App\Http\Requests\Order\RespondProposalRequest;
 use App\Http\Requests\Order\SendTurnMessageRequest;
 use App\Http\Requests\Order\ShowOrderRequest;
@@ -27,7 +27,6 @@ use App\Http\Requests\Order\StoreOrderRequest;
 use App\Http\Requests\Order\UpdateTurnMessageRequest;
 use App\Http\Resources\Order\CompleteOrderResource;
 use App\Http\Resources\Order\ListOrdersResource;
-use App\Http\Resources\Order\RespondAddendumResource;
 use App\Http\Resources\Order\RespondProposalResource;
 use App\Http\Resources\Order\SendTurnMessageResource;
 use App\Http\Resources\Order\ShowOrderResource;
@@ -59,6 +58,11 @@ class OrderController extends Controller
         return $action->handle($request->toDto());
     }
 
+    public function downloadContractPdf(DownloadOrderContractPdfRequest $request, DownloadOrderContractPdfAction $action): StreamedResponse
+    {
+        return $action->handle($request->toDto());
+    }
+
     public function sendMessage(SendTurnMessageRequest $request, SendTurnMessageAction $action): SendTurnMessageResource
     {
         return new SendTurnMessageResource($action->handle($request->toDto()));
@@ -82,11 +86,6 @@ class OrderController extends Controller
     public function storeAdjustment(StoreAdjustmentRequest $request, StoreAdjustmentAction $action): StoreAdjustmentResource
     {
         return new StoreAdjustmentResource($action->handle($request->toDto()));
-    }
-
-    public function respondAddendum(RespondAddendumRequest $request, RespondAddendumAction $action): RespondAddendumResource
-    {
-        return new RespondAddendumResource($action->handle($request->toDto()));
     }
 
     public function completeOrder(CompleteOrderRequest $request, CompleteOrderAction $action): CompleteOrderResource

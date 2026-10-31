@@ -15,3 +15,7 @@ Route::get('/dashboard', function () {
 Route::get('/admin/orders/{order}/attachments/{attachment}/download', [OrderController::class, 'downloadAttachment'])
     ->middleware('auth')
     ->name('filament.orders.attachments.download');
+
+Route::get('/admin/orders/{order}/contract/pdf', [OrderController::class, 'downloadContractPdf'])
+    ->middleware('auth')
+    ->name('filament.orders.contract.pdf');

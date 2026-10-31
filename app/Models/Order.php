@@ -40,6 +40,7 @@ class Order extends Model
      */
     protected $fillable = [
         'user_id',
+        'parent_order_id',
         'product_id',
         'title',
         'description',
@@ -66,6 +67,7 @@ class Order extends Model
     {
         return [
             'user_id' => 'integer',
+            'parent_order_id' => 'integer',
             'product_id' => 'integer',
             'final_price' => 'decimal:2',
             'estimated_days' => 'integer',
@@ -188,5 +190,38 @@ class Order extends Model
     public function project(): HasOne
     {
         return $this->hasOne(Project::class);
+    }
+
+    /**
+     * @return HasOne<OrderScope, $this>
+     */
+    public function scope(): HasOne
+    {
+        return $this->hasOne(OrderScope::class);
+    }
+
+    /**
+     * @return BelongsTo<Order, $this>
+     */
+    public function parentOrder(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_order_id');
+    }
+
+    /**
+     * @return HasMany<Order, $this>
+     */
+    public function childOrders(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_order_id');
+    }
+
+    public function hasCompleteScope(): bool
+    {
+        $scope = $this->relationLoaded('scope')
+            ? $this->scope
+            : $this->scope()->first();
+
+        return $scope instanceof OrderScope && $scope->isComplete();
     }
 }

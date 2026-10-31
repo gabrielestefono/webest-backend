@@ -86,6 +86,10 @@ class RespondProposalAction
             throw new BadRequestException('Não há uma proposta ativa do prestador aguardando sua decisão no momento.');
         }
 
+        if ($dto->decision === 'accept' && ! $order->hasCompleteScope()) {
+            throw new BadRequestException('O Escopo do Serviço deste pedido ainda não foi finalizado pelo prestador.');
+        }
+
         DB::transaction(function () use ($dto, $order, $user, $latestProposal): void {
             if ($dto->decision === 'accept') {
                 $order->proposals()
@@ -100,13 +104,11 @@ class RespondProposalAction
                     'superseded_at' => null,
                 ]);
 
-                $contractUrl = $order->contract_url ?: "#contrato-ord-{$order->id}";
-
                 $order->update([
                     'status' => 'awaiting_contract',
                     'final_price' => $latestProposal->price,
                     'estimated_days' => $latestProposal->estimated_days,
-                    'contract_url' => $contractUrl,
+                    'contract_url' => null,
                 ]);
 
                 $formattedPrice = number_format((float) $latestProposal->price, 2, ',', '.');
@@ -114,13 +116,12 @@ class RespondProposalAction
                 $this->timelineService->recordEvent(
                     order: $order,
                     eventType: 'contract_available',
-                    title: 'Proposta Aceita! Contrato Disponível',
-                    message: "Você aceitou a proposta comercial de R$ {$formattedPrice} ({$latestProposal->estimated_days} dias úteis). O contrato de prestação de serviços está disponível para leitura e assinatura digital.",
+                    title: 'Proposta Aceita! Escopo & Contrato Consolidado Disponíveis',
+                    message: "Você aceitou a proposta comercial de R$ {$formattedPrice} ({$latestProposal->estimated_days} dias úteis). O PDF consolidado com o Escopo do Serviço e todo o histórico da negociação está pronto para download e assinatura digital.",
                     payload: [
                         'proposal_id' => $latestProposal->id,
                         'price' => (float) $latestProposal->price,
                         'estimated_days' => $latestProposal->estimated_days,
-                        'contract_url' => $contractUrl,
                     ],
                     actorId: $user->id,
                 );
